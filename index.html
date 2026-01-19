@@ -88,7 +88,10 @@ function neighbors4(N,x,y){
 
 function pickStartInLargestComponent(rng, N, staticOcc){
   const seen = new Uint8Array(N*N);
-  let bestComp = null;
+
+  let bestSize = 0;
+  let bestStartable = null;       // array of {x,y} that can start
+  let bestAll = null;             // array of {x,y} all empty in the component
 
   for (let y=0;y<N;y++){
     for (let x=0;x<N;x++){
@@ -96,35 +99,184 @@ function pickStartInLargestComponent(rng, N, staticOcc){
       if (seen[id]) continue;
       if (staticOcc.occD[id]) { seen[id]=1; continue; }
 
-      // BFS this component
-      const qx=[x], qy=[y];
-      seen[id]=1;
-      const comp = [];
+      // BFS this empty-dot component
+      let head = 0;
+      const qx = [x];
+      const qy = [y];
+      seen[id] = 1;
 
-      for (let qi=0; qi<qx.length; qi++){
-        const cx=qx[qi], cy=qy[qi];
-        // only keep nodes that can actually start an arrow
-        if (hasFreeNeighbor(N, staticOcc, cx, cy)) comp.push({x:cx,y:cy});
+      const compAll = [];
+      const compStartable = [];
 
-        const ns = neighbors4(N,cx,cy);
-        for (let k=0;k<ns.length;k++){
-          const nx=ns[k].x, ny=ns[k].y;
-          const nid=dId(N,nx,ny);
-          if (seen[nid]) continue;
-          if (staticOcc.occD[nid]) { seen[nid]=1; continue; }
-          seen[nid]=1;
-          qx.push(nx); qy.push(ny);
+      while (head < qx.length){
+        const cx = qx[head];
+        const cy = qy[head];
+        head++;
+
+        compAll.push({x:cx,y:cy});
+        if (hasFreeNeighbor(N, staticOcc, cx, cy)) compStartable.push({x:cx,y:cy});
+
+        // neighbors4 inline (faster)
+        let nx, ny, nid;
+
+        nx = cx + 1; ny = cy;
+        if (nx < N){
+          nid = dId(N,nx,ny);
+          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
+        }
+
+        nx = cx - 1; ny = cy;
+        if (nx >= 0){
+          nid = dId(N,nx,ny);
+          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
+        }
+
+        nx = cx; ny = cy + 1;
+        if (ny < N){
+          nid = dId(N,nx,ny);
+          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
+        }
+
+        nx = cx; ny = cy - 1;
+        if (ny >= 0){
+          nid = dId(N,nx,ny);
+          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
         }
       }
 
-      if (comp.length && (!bestComp || comp.length > bestComp.length)){
-        bestComp = comp;
+      // component "size" is all empty dots, but we only keep it if we have any startable
+      if (compStartable.length && compAll.length > bestSize){
+        bestSize = compAll.length;
+        bestAll = compAll;
+        bestStartable = compStartable;
       }
     }
   }
 
-  if (!bestComp) return null;
-  return bestComp[(rng()*bestComp.length)|0];
+  if (!bestStartable || !bestStartable.length) return null;
+
+  // Bias toward deep-interior points of the biggest void:
+  // pick among the top K by borderDist (farther from border => more "inside the lake")
+  const K = Math.min(32, bestStartable.length);
+
+  // compute borderDist for each, then partial-select top K by simple insertion
+  const top = [];
+  for (let i=0;i<bestStartable.length;i++){
+    const p = bestStartable[i];
+    const bd = borderDist(N, p.x, p.y);
+
+    // keep a small list of best K by bd
+    let inserted = false;
+    for (let j=0;j<top.length;j++){
+      if (bd > top[j].bd){
+        top.splice(j, 0, {x:p.x,y:p.y,bd});
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) top.push({x:p.x,y:p.y,bd});
+    if (top.length > K) top.length = K;
+  }
+
+  // random among top K, with a mild skew to the best
+  // (square the RNG so it leans toward the start of the list)
+  const r = rng();
+  const idx = Math.floor((r*r) * top.length);
+  return {x: top[idx].x, y: top[idx].y};
+}
+
+function largestEmptyComponentStats(N, level){
+  // Build a dot-occupancy grid from level.arrows (dots occupied by any arrow)
+  const occD = new Uint8Array(N * N);
+  for (let i=0;i<level.arrows.length;i++){
+    const a = level.arrows[i];
+    const chain = a.chain;
+    for (let k=0;k<chain.length;k++){
+      const p = chain[k];
+      // chain dots are always in-bounds by construction
+      occD[dId(N, p.x, p.y)] = 1;
+    }
+  }
+
+  const seen = new Uint8Array(N * N);
+  let largest = 0;
+  let second = 0;
+  let third = 0;
+  let emptyCount = 0;
+
+  for (let y=0;y<N;y++){
+    for (let x=0;x<N;x++){
+      const id = dId(N,x,y);
+      if (occD[id]) continue;
+      emptyCount++;
+      if (seen[id]) continue;
+
+      // BFS on empty component
+      let head = 0;
+      const qx = [x];
+      const qy = [y];
+      seen[id] = 1;
+      let size = 0;
+
+      while (head < qx.length){
+        const cx = qx[head];
+        const cy = qy[head];
+        head++;
+        size++;
+
+        // 4-neighborhood
+        // inline bounds checks for speed
+        let nx, ny, nid;
+
+        nx = cx + 1; ny = cy;
+        if (nx < N){
+          nid = dId(N,nx,ny);
+          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+        }
+
+        nx = cx - 1; ny = cy;
+        if (nx >= 0){
+          nid = dId(N,nx,ny);
+          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+        }
+
+        nx = cx; ny = cy + 1;
+        if (ny < N){
+          nid = dId(N,nx,ny);
+          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+        }
+
+        nx = cx; ny = cy - 1;
+        if (ny >= 0){
+          nid = dId(N,nx,ny);
+          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
+        }
+      }
+
+      // track top 3 component sizes
+      if (size > largest){
+        third = second;
+        second = largest;
+        largest = size;
+      } else if (size > second){
+        third = second;
+        second = size;
+      } else if (size > third){
+        third = size;
+      }
+    }
+  }
+
+  return {
+    emptyCount,
+    largest,
+    second,
+    third
+  };
 }
 
 /* ---------- Grid helpers ---------- */
@@ -621,7 +773,7 @@ function scoreLevel(level){
   const N = level.N;
   const totalDots = N * N;
 
-  function borderDist(x,y){
+  function borderDistLocal(x,y){
     const a = x, b = y, c = (N-1)-x, d = (N-1)-y;
     return Math.min(a,b,c,d);
   }
@@ -631,6 +783,7 @@ function scoreLevel(level){
   let avgLen = 0;
   let micro = 0;
   let longish = 0;
+  let veryLong = 0;
   let borderUsed = 0;
 
   // “center box” ~ middle 60%
@@ -639,6 +792,8 @@ function scoreLevel(level){
   const y0 = Math.floor(N * 0.20);
   const y1 = Math.ceil (N * 0.80);
 
+  const veryLongThresh = Math.max(26, Math.floor(N * 0.35));
+
   for (let i=0;i<level.arrows.length;i++){
     const a = level.arrows[i];
     const len = a.chain.length;
@@ -646,10 +801,9 @@ function scoreLevel(level){
     usedDots += len;
     avgLen += len;
 
-    // these should be mostly gone now, but keep the pressure on
     if (len < 9) micro++;
-
     if (len >= Math.max(16, N * 0.12)) longish++;
+    if (len >= veryLongThresh) veryLong++;
 
     for (let k=0;k<a.chain.length;k++){
       const p = a.chain[k];
@@ -657,7 +811,7 @@ function scoreLevel(level){
       if (p.x>=x0 && p.x<x1 && p.y>=y0 && p.y<y1) centerUsed++;
 
       // penalize heavy border usage (distance 0 or 1 from border)
-      if (borderDist(p.x,p.y) < 2) borderUsed++;
+      if (borderDistLocal(p.x,p.y) < 2) borderUsed++;
     }
   }
 
@@ -671,23 +825,31 @@ function scoreLevel(level){
   const lengthBonus = Math.min(1, avgLen / Math.max(10, N * 0.08));
   const variety = Math.min(1, (longish / Math.max(1, level.arrows.length)) * 2.0);
 
-  // fraction of all occupied dots that are hugging the border
   const borderPenalty = borderUsed / Math.max(1, usedDots);
 
+  // NEW: void (largest empty component) penalty
+  const stats = largestEmptyComponentStats(N, level);
+  const largestEmptyFrac = stats.largest / totalDots;
+  const secondEmptyFrac  = stats.second  / totalDots;
+
+  // NEW: reward *some* very long hero strokes (but cap it)
+  const heroBonus = Math.min(1, veryLong / 3) * 0.55;
+
   // weights: center first, then coverage, then “nice long-ish” lines,
-  // and explicitly punish border-hugging dominance.
+  // punish border-hugging, and punish giant void lakes.
   return (
-    centerCoverage * 4.2 +
-    coverage       * 2.2 +
-    lengthBonus    * 0.9 +
-    variety        * 0.6 -
-    microPenalty   * 2.8 -
-    borderPenalty  * 2.6 +
+    centerCoverage   * 4.2 +
+    coverage         * 2.2 +
+    lengthBonus      * 0.9 +
+    variety          * 0.6 +
+    heroBonus        * 1.0 -
+    microPenalty     * 2.8 -
+    borderPenalty    * 2.6 -
+    largestEmptyFrac * 7.0 -
+    secondEmptyFrac  * 2.5 +
     level.arrows.length * 0.00015
   );
 }
-
-
 
 /* ---------- Worker search loop ---------- */
 function runSearch(msg){
