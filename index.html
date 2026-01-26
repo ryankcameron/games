@@ -34,7 +34,7 @@
   <div class="spacer"></div>
 
   <div class="pill">Status: <b id="statusTxt">Idle</b></div>
-  <div class="pill">Strikes: <b id="strikeTxt">0</b>/3</div>
+  <div class="pill">Strikes: <b id="strikeTxt">0</b>/<span id="strikeMaxTxt">9</span></div>
   <div class="pill">Remaining: <b id="remainTxt">0</b></div>
   <span class="muted">Generation runs in worker pool (Blob). Click any tail/head to move.</span>
 </header>
@@ -57,6 +57,7 @@ let view = {
   isPanning: false,
   panStart: null
 };
+const strikesAllowed = 9;
 const LEVEL_WORKER_SOURCE = `
 /* ============================================================
    level_worker.js (Blob worker)
@@ -288,6 +289,316 @@ function largestEmptyComponentStats(N, level){
     third
   };
 }
+/* ---------- Mask stuff ------------ */
+function makeRectMask(x0, y0, w, h){
+  return (x,y) => (x >= x0 && x < x0+w && y >= y0 && y < y0+h);
+}
+
+function chainToVertices(chain){
+  const verts = [{ x: chain[0].x, y: chain[0].y }];
+  for (let i=2;i<chain.length;i++){
+    const a=chain[i-2], b=chain[i-1], c=chain[i];
+    const dx1=b.x-a.x, dy1=b.y-a.y;
+    const dx2=c.x-b.x, dy2=c.y-b.y;
+    if (dx1!==dx2 || dy1!==dy2) verts.push({x:b.x,y:b.y});
+  }
+  verts.push({ x: chain[chain.length-1].x, y: chain[chain.length-1].y });
+  return verts;
+}
+
+// Keep the longest tail->head prefix that stays inside mask.
+// Then rebuild as a proper arrow later.
+// Keep the longest contiguous sub-chain that lies fully inside the mask.
+// (Not just a prefix from the tail.)
+function clipArrowChainToMask(arrow, inMask){
+  const ch = arrow.chain;
+  let bestA = -1, bestB = -1;
+  let a = -1;
+
+  for (let i = 0; i < ch.length; i++){
+    const inside = inMask(ch[i].x, ch[i].y);
+    if (inside){
+      if (a < 0) a = i;           // start a run
+    } else {
+      if (a >= 0){
+        const b = i - 1;
+        if (b - a > bestB - bestA){ bestA = a; bestB = b; }
+        a = -1;
+      }
+    }
+  }
+  if (a >= 0){
+    const b = ch.length - 1;
+    if (b - a > bestB - bestA){ bestA = a; bestB = b; }
+  }
+
+  if (bestA < 0) return null;
+
+  const outLen = bestB - bestA + 1;
+  if (outLen < 3) return null; // need >= 2 edges
+
+  const out = [];
+  for (let i = bestA; i <= bestB; i++){
+    out.push({ x: ch[i].x, y: ch[i].y });
+  }
+  return out;
+}
+
+
+function cropAndRebuildArrows(Nbig, arrowsBig, x0, y0, N){
+  const inMaskBig = makeRectMask(x0, y0, N, N);
+  const kept = [];
+
+  for (const a of arrowsBig){
+    const clippedChainBig = clipArrowChainToMask(a, inMaskBig);
+    if (!clippedChainBig) continue;
+
+    // remap to local cropped coordinates
+    const chainLocal = clippedChainBig.map(p => ({x:p.x - x0, y:p.y - y0}));
+
+    // compress to vertices then rebuild canonical arrow data
+    const vertsLocal = chainToVertices(chainLocal);
+    const rebuilt = buildArrowFromVertices(N, vertsLocal);
+    if (!rebuilt) continue;
+
+    // enforce your minimum (avoid stubs)
+    if (rebuilt.chain.length < 5) continue;
+    if (violatesSelfAim(N, rebuilt)) continue;
+
+    kept.push(rebuilt);
+  }
+
+  return kept;
+}
+function buildOccDFromArrowsBig(N, arrows){
+  const occD = new Uint8Array(N*N);
+  for (let i=0;i<arrows.length;i++){
+    const ch = arrows[i].chain;
+    for (let k=0;k<ch.length;k++){
+      const p = ch[k];
+      if (p.x>=0 && p.x<N && p.y>=0 && p.y<N) occD[dId(N,p.x,p.y)] = 1;
+    }
+  }
+  return occD;
+}
+
+// summed-area table (integral image) for fast window sums
+function buildIntegral(N, occD){
+  // int[y*(N+1)+x] for x,y in 0..N
+  const W = N + 1;
+  const I = new Int32Array(W * W);
+  for (let y=1;y<=N;y++){
+    let rowSum = 0;
+    for (let x=1;x<=N;x++){
+      rowSum += occD[(y-1)*N + (x-1)];
+      I[y*W + x] = I[(y-1)*W + x] + rowSum;
+    }
+  }
+  return I;
+}
+
+function rectSum(I, N, x0,y0,w,h){
+  const W = N+1;
+  const x1 = x0 + w, y1 = y0 + h;
+  return I[y1*W + x1] - I[y0*W + x1] - I[y1*W + x0] + I[y0*W + x0];
+}
+
+function findBestCropWindow(Nbig, arrowsBig, Nwin){
+  const occD = buildOccDFromArrowsBig(Nbig, arrowsBig);
+  const I = buildIntegral(Nbig, occD);
+
+  const com = arrowsCenterOfMass(arrowsBig);
+  const cx = com.x, cy = com.y;
+
+  let best = { x0: (Nbig-Nwin)>>1, y0: (Nbig-Nwin)>>1, s: -1 };
+
+  const maxX = Nbig - Nwin;
+  const maxY = Nbig - Nwin;
+
+  const lambda = 0.015; // tune 0.005..0.03
+
+  for (let y0=0; y0<=maxY; y0++){
+    for (let x0=0; x0<=maxX; x0++){
+      const s = rectSum(I, Nbig, x0,y0, Nwin,Nwin);
+
+      // distance from window center to COM
+      const wx = x0 + Nwin*0.5;
+      const wy = y0 + Nwin*0.5;
+      const dx = wx - cx, dy = wy - cy;
+      const penal = lambda * (dx*dx + dy*dy);
+
+      const score = s - penal;
+      if (score > best.s){
+        best = { x0, y0, s: score };
+      }
+    }
+  }
+  return best;
+}
+
+function arrowsCenterOfMass(arrows){
+  let sx=0, sy=0, n=0;
+  for (const a of arrows){
+    for (const p of a.chain){ sx += p.x; sy += p.y; n++; }
+  }
+  if (!n) return {x:0,y:0};
+  return { x: sx/n, y: sy/n };
+}
+function keepLargestOccupiedComponent(N, arrows){
+  if (!arrows.length) return arrows;
+
+  // Build dot occupancy and which arrows touch each dot
+  const occ = new Uint8Array(N*N);
+  const dotToArrows = Array.from({length:N*N}, () => null);
+
+  for (let ai=0; ai<arrows.length; ai++){
+    const ch = arrows[ai].chain;
+    for (let k=0; k<ch.length; k++){
+      const id = dId(N, ch[k].x, ch[k].y);
+      occ[id] = 1;
+      (dotToArrows[id] ??= []).push(ai);
+    }
+  }
+
+  const seen = new Uint8Array(N*N);
+  const q = new Int32Array(N*N);
+
+  let bestDots = null;
+  let bestSize = 0;
+
+  for (let i=0;i<occ.length;i++){
+    if (!occ[i] || seen[i]) continue;
+
+    // BFS occupied component
+    let head=0, tail=0;
+    q[tail++] = i;
+    seen[i] = 1;
+
+    const compDots = [];
+    while (head < tail){
+      const id = q[head++];
+      compDots.push(id);
+
+      const x = id % N;
+      const y = (id / N) | 0;
+
+      // 4-neighborhood
+      if (x+1 < N){
+        const n = id + 1;
+        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
+      }
+      if (x-1 >= 0){
+        const n = id - 1;
+        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
+      }
+      if (y+1 < N){
+        const n = id + N;
+        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
+      }
+      if (y-1 >= 0){
+        const n = id - N;
+        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
+      }
+    }
+
+    if (compDots.length > bestSize){
+      bestSize = compDots.length;
+      bestDots = compDots;
+    }
+  }
+
+  if (!bestDots || bestSize === 0) return [];
+
+  // Keep arrows that touch any dot in the largest component
+  const keep = new Uint8Array(arrows.length);
+  for (let i=0;i<bestDots.length;i++){
+    const lst = dotToArrows[bestDots[i]];
+    if (!lst) continue;
+    for (let j=0;j<lst.length;j++) keep[lst[j]] = 1;
+  }
+
+  const out = [];
+  for (let i=0;i<arrows.length;i++){
+    if (keep[i]) out.push(arrows[i]);
+  }
+  return out;
+}
+
+function initBBoxFromArrow(arrow){
+  let minX=1e9, minY=1e9, maxX=-1e9, maxY=-1e9;
+  for (const p of arrow.chain){
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function expandBBoxWithArrow(bb, arrow){
+  for (const p of arrow.chain){
+    if (p.x < bb.minX) bb.minX = p.x;
+    if (p.y < bb.minY) bb.minY = p.y;
+    if (p.x > bb.maxX) bb.maxX = p.x;
+    if (p.y > bb.maxY) bb.maxY = p.y;
+  }
+}
+
+function pickFrontierByBlobRim(rng, N, frontier, bb, mode){
+  if (!frontier || !frontier.length) return null;
+
+  const cx = (bb.minX + bb.maxX) * 0.5;
+  const cy = (bb.minY + bb.maxY) * 0.5;
+
+  // Helper: how "multi-sided" the blob contact is (encourages wrapping vs spokes)
+  function sideContactScore(p){
+    let sides = 0;
+    const x=p.x, y=p.y;
+    // NOTE: frontier points are empty dots. We infer blob contact from p.adj,
+    // but we also want diversity of contact directions. We approximate it using p.sc and p.adj.
+    // If you want exact directionality, we can compute it from staticOcc inside buildFrontier.
+    // For now: reward adj>=2 a lot.
+    if ((p.adj|0) >= 2) sides += 2;
+    if ((p.adj|0) >= 3) sides += 2;
+    return sides;
+  }
+
+  const SAMP = Math.min(frontier.length, 260);
+  let best = null;
+  let bestScore = -Infinity;
+
+  for (let i=0;i<SAMP;i++){
+    const p = frontier[(rng()*frontier.length)|0];
+
+    const adj = p.adj ?? 0;      // 1..4, blob-touch count (no borders)
+    if (adj < 2 && frontier.length > 120) continue;      // <<< BIG: prevents “single-touch launch rays”
+
+    const sc = p.sc ?? 0;        // 0..4 (includes border-as-occupied)
+    const bd = borderDist(N, p.x, p.y);
+
+    const dx = p.x - cx, dy = p.y - cy;
+    const d2 = dx*dx + dy*dy;
+
+    // Expand = slightly prefer farther rim points but still with high adjacency
+    // Fill   = prefer near-center pockets, high adjacency
+    const rimness = adj * 35 + sc * 6 + sideContactScore(p) * 12;
+
+    let score;
+    if (mode === "expand"){
+      score = (d2 * 0.25) + rimness + bd * 1.5 + rng()*2.0;
+    } else {
+      score = (-d2 * 0.35) + rimness + bd * 2.0 + rng()*2.0;
+    }
+
+    if (score > bestScore){
+      bestScore = score;
+      best = p;
+    }
+  }
+
+  return best ? {x:best.x, y:best.y} : null;
+}
+
 
 /* ---------- Grid helpers ---------- */
 function hId(N,x,y){ return y*(N-1)+x; }
@@ -346,6 +657,15 @@ function occupyStatic(occ, arrow, val){
   for (let i=0;i<EH.length;i++) occ.occH[EH[i]] = val;
   for (let i=0;i<EV.length;i++) occ.occV[EV[i]] = val;
   for (let i=0;i<ED.length;i++) occ.occD[ED[i]] = val;
+}
+function neighborOccScore(N, staticOcc, x, y){
+  let s = 0;
+  // treat out-of-bounds as occupied (pushes you away from borders if desired)
+  if (x<=0 || staticOcc.occD[dId(N,x-1,y)]) s++;
+  if (x>=N-1 || staticOcc.occD[dId(N,x+1,y)]) s++;
+  if (y<=0 || staticOcc.occD[dId(N,x,y-1)]) s++;
+  if (y>=N-1 || staticOcc.occD[dId(N,x,y+1)]) s++;
+  return s; // 0..4
 }
 
 /* ---------- Build arrow from vertices ---------- */
@@ -575,6 +895,20 @@ function growArrowVerticesInFreeSpace(rng, N, style, staticOcc, forcedStart){
   const usedV = new Uint8Array(N*(N-1));
   usedD[dId(N,sx,sy)] = 1;
 
+  // How "close to occupied stuff" is this dot? (0..4)
+  // Higher means it hugs existing lines/borders more.
+  function neighborOccScore(x, y){
+    let s = 0;
+
+    // out-of-bounds counts as occupied (helps avoid drifting into borders awkwardly)
+    if (x <= 0 || staticOcc.occD[dId(N, x-1, y)]) s++;
+    if (x >= N-1 || staticOcc.occD[dId(N, x+1, y)]) s++;
+    if (y <= 0 || staticOcc.occD[dId(N, x, y-1)]) s++;
+    if (y >= N-1 || staticOcc.occD[dId(N, x, y+1)]) s++;
+
+    return s;
+  }
+
   function dotOk(nx,ny){
     if (!dotInBounds(N,nx,ny)) return false;
     const did = dId(N,nx,ny);
@@ -582,19 +916,51 @@ function growArrowVerticesInFreeSpace(rng, N, style, staticOcc, forcedStart){
     if (staticOcc.occD[did]) return false;
     return true;
   }
+  const boundaryBias = style.boundaryBias ?? 0; // 0..1 (prefer tight areas)
+  const centerPull = style.centerPull ?? null;
+  const interiorBias = style.interiorBias ?? 0; // 0..1 (prefer open void)
+  
   function edgeOk(cx,cy,nx,ny){
     if (!dotOk(nx,ny)) return false;
-    const e=edgeBetweenDots(N,cx,cy,nx,ny);
+    if (centerPull){
+      const dx0 = cx - centerPull.cx, dy0 = cy - centerPull.cy;
+      const dx1 = nx - centerPull.cx, dy1 = ny - centerPull.cy;
+      const d20 = dx0*dx0 + dy0*dy0;
+      const d21 = dx1*dx1 + dy1*dy1;
+
+      // if this step increases distance, sometimes reject it
+      if (d21 > d20 && rng() < (centerPull.p || 0.25)) return false;
+    }
+	const sc = neighborOccScore(nx, ny); // 0..4
+
+	// --- interiorBias: prefer OPEN space (low sc) by rejecting tight moves ---
+	if (interiorBias > 0) {
+	  // sc: 0 open -> 4 tight. Make rejection grow with sc.
+	  const rejectP = interiorBias * (sc / 4);
+	  if (rng() < rejectP) return false;
+	}
+
+	// --- boundaryBias: prefer STITCHING (high sc) by rejecting open moves ---
+	if (boundaryBias > 0) {
+	  // reject more when sc is low (open)
+	  const rejectP = boundaryBias * ((4 - sc) / 4);
+	  if (rng() < rejectP) return false;
+	}
+  
+    const e = edgeBetweenDots(N,cx,cy,nx,ny);
     if (!e.t) return false;
+  
     if (e.t==="H"){
       if (usedH[e.id]) return false;
       if (staticOcc.occH[e.id]) return false;
-    } else {
+    } else { // "V"
       if (usedV[e.id]) return false;
       if (staticOcc.occV[e.id]) return false;
     }
     return true;
   }
+
+
   function commit(cx,cy,nx,ny){
     usedD[dId(N,nx,ny)] = 1;
     const e=edgeBetweenDots(N,cx,cy,nx,ny);
@@ -622,32 +988,92 @@ function growArrowVerticesInFreeSpace(rng, N, style, staticOcc, forcedStart){
   let edgesBuilt = 1;
   let turns = 0;
 
-  while (turns < maxTurns && edgesBuilt < maxEdgeLen){
-    const segLen = rint(rng, minSeg, maxSeg);
-    const last = verts[verts.length-1];
-    let cx=last.x, cy=last.y;
+  // Turning behavior knobs:
+  // - turnEvery: average "chunk" length in edges before a turn opportunity
+  // - turnChance: chance to turn at each opportunity (after meeting min segment)
+  const turnEvery   = style.turnEvery   ?? 2;    // 2 => very turny
+  const turnChance  = style.turnChance  ?? 0.85; // 0.85 => almost always turn
+  const maxStraight = style.maxStraight ?? maxSeg; // safety cap
 
-    let moved = 0;
-    for (let i=0;i<segLen;i++){
-      const nx=cx+dir.dx, ny=cy+dir.dy;
+  while (turns < maxTurns && edgesBuilt < maxEdgeLen){
+    const last = verts[verts.length-1];
+    let cx = last.x, cy = last.y;
+
+    // We build in small "chunks" so we can turn often.
+    // But we still enforce minSeg >= 2 edges between turns.
+    let movedThisVertex = 0;
+
+    // Choose a target straight run length for this vertex (keeps some variety)
+    const target = Math.min(maxStraight, Math.max(minSeg, rint(rng, minSeg, maxSeg)));
+
+    while (movedThisVertex < target && edgesBuilt < maxEdgeLen){
+      const nx = cx + dir.dx, ny = cy + dir.dy;
       if (!edgeOk(cx,cy,nx,ny)) break;
       commit(cx,cy,nx,ny);
-      cx=nx; cy=ny;
+      cx = nx; cy = ny;
       edgesBuilt++;
-      moved++;
-      if (edgesBuilt>=maxEdgeLen) break;
+      movedThisVertex++;
+
+      // After we've moved at least minSeg edges from the last turn/vertex,
+      // we get frequent opportunities to turn.
+      if (movedThisVertex >= minSeg){
+        if ((movedThisVertex % turnEvery) === 0){
+          // honor allowStraightChance (rarely keep going straight)
+          const willConsiderTurn = (rng() >= allowStraightChance);
+
+          if (willConsiderTurn && rng() < turnChance){
+            // commit a vertex at the current position (turn happens at this dot)
+            verts.push({x:cx,y:cy});
+
+            // pick a perpendicular direction
+			// pick a perpendicular direction that hugs existing stuff (higher neighborOccScore),
+			// while still being feasible for at least the next step.
+			let candA, candB;
+			if (dir.k==="U"||dir.k==="D"){ candA = DIRS[2]; candB = DIRS[3]; } // L/R
+			else                         { candA = DIRS[0]; candB = DIRS[1]; } // U/D
+
+			function firstStepScore(d){
+			  const nx = cx + d.dx, ny = cy + d.dy;
+			  if (!edgeOk(cx, cy, nx, ny)) return -1e9;
+			  // Prefer stitchiness immediately
+			  return neighborOccScore(nx, ny);
+			}
+
+			const sA = firstStepScore(candA);
+			const sB = firstStepScore(candB);
+
+			// Mostly take the better “hugging” turn, but keep a little entropy
+			if (sA === sB){
+			  dir = (rng() < 0.5) ? candA : candB;
+			} else {
+			  const best = (sA > sB) ? candA : candB;
+			  const other= (sA > sB) ? candB : candA;
+			  dir = (rng() < 0.85) ? best : other;
+			}
+
+            turns++;
+            movedThisVertex = 0; // reset segment length after a turn
+            // continue building from the same (cx,cy) but in new dir
+          }
+        }
+      }
     }
 
-    // require >=2 edges in this segment (prevents stubs / dir ambiguity)
-    if (moved < 2) break;
+    // If we couldn't move enough to make a valid segment, stop.
+    if (movedThisVertex > 0 && movedThisVertex < minSeg) break;
 
-    verts.push({x:cx,y:cy});
-
-    // decide turn
-    if (rng() >= allowStraightChance){
-      if (dir.k==="U"||dir.k==="D") dir = (rng()<0.5) ? DIRS[2] : DIRS[3];
-      else dir = (rng()<0.5) ? DIRS[0] : DIRS[1];
+    // If we ended with a straight run (no turn at end), add a vertex here.
+    // (But avoid pushing duplicates.)
+    const tail = verts[verts.length-1];
+    if (!tail || tail.x !== cx || tail.y !== cy){
+      verts.push({x:cx,y:cy});
     }
+
+    // If we made zero progress, we’re stuck.
+    if (movedThisVertex === 0) break;
+
+    // If we didn't turn during this iteration, count it as a "turn opportunity" consumed.
+    // (This keeps maxTurns meaningful.)
     turns++;
   }
 
@@ -655,6 +1081,63 @@ function growArrowVerticesInFreeSpace(rng, N, style, staticOcc, forcedStart){
   if (verts.length < 2) return null;
   return verts;
 }
+function buildEdgeFrontier(N, staticOcc, edgeBand){
+  const out = [];
+  for (let y=0;y<N;y++){
+    for (let x=0;x<N;x++){
+      const id = dId(N,x,y);
+      if (staticOcc.occD[id]) continue;
+      if (!hasFreeNeighbor(N, staticOcc, x, y)) continue;
+
+      const bd = borderDist(N, x, y);
+      if (bd > edgeBand) continue;         // ONLY near edge band
+
+      const sc = neighborOccScore(N, staticOcc, x, y); // 0..4
+      if (sc >= 1) out.push({x,y, bd, sc});
+    }
+  }
+  return out;
+}
+
+function pickEdgeFrontier(rng, edgeFrontier){
+  if (!edgeFrontier.length) return null;
+  // bias to bd=0/1 (closest to border)
+  let best = null;
+  let bestScore = Infinity;
+  const SAMP = Math.min(edgeFrontier.length, 128);
+  for (let i=0;i<SAMP;i++){
+    const p = edgeFrontier[(rng()*edgeFrontier.length)|0];
+    // lower is better: bd dominates, then prefer higher sc (stitchiness)
+	const targetBd = 2;
+	const score =
+	  Math.abs(p.bd - targetBd) * 2.2 +   // closest to bd≈2 wins
+	  (4 - p.sc) * 0.7 +                  // still like stitching
+	  rng() * 0.25;
+    if (score < bestScore){ bestScore = score; best = p; }
+  }
+  return best ? {x:best.x, y:best.y} : null;
+}
+/* ---------- Blob level then crop approach --------------- */
+function generateLevelBlobThenCrop(N, seed){
+  // Big working canvas (a bit bigger helps)
+  const margin = Math.max(12, Math.floor(N * 0.45)); // was 0.25
+  const Nbig = N + margin*2;
+
+  // 1) Generate on big grid
+  const big = generateLevelFillUntilStuck(Nbig, seed);
+  if (!big || !big.arrows || big.arrows.length < 1) return { N, arrows: [] };
+
+  // 2) Pick best N×N crop window (densest dots)
+  const win = findBestCropWindow(Nbig, big.arrows, N);
+  const x0 = win.x0;
+  const y0 = win.y0;
+
+  // 3) Crop + rebuild
+  let cropped = cropAndRebuildArrows(Nbig, big.arrows, x0, y0, N);
+  cropped = keepLargestOccupiedComponent(N, cropped); // <<<<<< NEW
+  return { N, arrows: cropped };
+}
+
 
 /* ---------- Level generator (fill until stuck) ---------- */
 function generateLevelFillUntilStuck(N, seed){
@@ -662,121 +1145,250 @@ function generateLevelFillUntilStuck(N, seed){
   const staticOcc = makeOcc(N);
   const arrows = [];
 
-  function pickStyle(){
-    const r = rng();
-
-    // Big sweepers
-    if (r < 0.30){
-      return {
-        maxTurns: 220,
-        minSeg: 6,
-        maxSeg: 26,
-        allowStraightChance: 0.35,
-        minEdges: 2,
-        startBias: "center",
-		borderMargin: 3
-      };
-    }
-
-    // Medium fill
-    if (r < 0.75){
-      return {
-        maxTurns: 220,
-        minSeg: 3,
-        maxSeg: 12,
-        allowStraightChance: 0.10,
-        minEdges: 2,
-        startBias: "any",
-		borderMargin: 3
-      };
-    }
-
-    // Tight wiggles (still minSeg >= 2!)
-    return {
-      maxTurns: 260,
-      minSeg: 2,
-      maxSeg: 8,
-      allowStraightChance: 0.05,
-      minEdges: 2,
-      startBias: "any",
-	  borderMargin: 3
-    };
-  }
-
-  // Phase A: broad strokes
   const maxArrows = 9000;
-  const maxConsecutiveFails = Math.max(6000, N*N);
-  let fails = 0;
+  let blobBB = null;
+  // --- Multi-seed count ---
+  const seedCount = 1; // <<<<<< single colony
 
-  while (arrows.length < maxArrows && fails < maxConsecutiveFails){
-    const style = pickStyle();
-    const verts = growArrowVerticesInFreeSpace(rng, N, style, staticOcc, null);
-    if (!verts) { fails++; continue; }
-
-    const arrow = buildArrowFromVertices(N, verts);
-    if (!arrow) { fails++; continue; }
-    if (arrow.chain.length < 9) { fails++; continue; } // bump min length (try 9–13)
-    if (violatesSelfAim(N, arrow)) { fails++; continue; }
-
-    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
-    if (!sim.ok) { fails++; continue; }
-
-	const head = arrow.chain[arrow.chain.length - 1];
-	if (borderDist(N, head.x, head.y) < 2) { fails++; continue; }
-
-	occupyStatic(staticOcc, arrow, 1);
-	arrows.push(arrow);
-	fails = 0;
-
+  // --- Seed placement (center-biased) ---
+  const cx0 = (N-1) * 0.5;
+  const cy0 = (N-1) * 0.5;
+  function centeredDot(){
+    // average-of-uniforms => approx gaussian-ish
+    const g = () => (rng()+rng()+rng()+rng()) * 0.25;
+	const spread = 0.22
+    const x = Math.round(cx0 + (g()-0.5) * (N-1) * spread);
+    const y = Math.round(cy0 + (g()-0.5) * (N-1) * spread);
+    return {
+      x: Math.max(2, Math.min((N-1)-2, x)),
+      y: Math.max(2, Math.min((N-1)-2, y)),
+    };
   }
 
-  // Phase B: targeted gap fill until no startable empty dots remain
-  let gapFails = 0;
-  const gapFailLimit = Math.max(N*N*3, 4000);
 
-  while (gapFails < gapFailLimit && arrows.length < maxArrows){
-    const empties = findEmptyDots(N, staticOcc);
-    if (empties.length === 0) break;
+  // Styles (same “language” as your current ones)
+  const STYLE_SEED_SWEEP = {
+    maxTurns: 240,
+    minSeg: 2,
+    maxSeg: 10,
+    turnEvery: 2,
+    turnChance: 0.90,
+    allowStraightChance: 0.05,
+  
+    interiorBias: 0.05,   // almost none
+    boundaryBias: 0.60,   // start hugging early
+  
+    minEdges: 2,
+    startBias: "any",
+    borderMargin: 2
+  };
+  
 
-    // quick check: is there ANY empty dot that can start?
-    let anyCandidate = false;
-    for (let i=0;i<empties.length;i++){
-      const p=empties[i];
-      if (hasFreeNeighbor(N, staticOcc, p.x,p.y)){ anyCandidate = true; break; }
+  const STYLE_STITCH = {
+    maxTurns: 200,
+    minSeg: 2,
+    maxSeg: 6,
+    turnEvery: 2,
+    turnChance: 0.95,
+    allowStraightChance: 0.02,
+  
+    interiorBias: 0.12,
+    boundaryBias: 0.65,
+  
+    minEdges: 2,
+    startBias: "any",
+    borderMargin: 0
+  };
+  
+const STYLE_BITE = {
+  maxTurns: 200,
+  minSeg: 2,
+  maxSeg: 7,
+  turnEvery: 2,
+  turnChance: 0.93,
+  allowStraightChance: 0.03,
+
+  interiorBias: 0.10,   // don't chase open void hard
+  boundaryBias: 0.55,   // stitch around existing blob
+
+  minEdges: 2,
+  startBias: "any",
+  borderMargin: 0
+};
+
+
+  // --- Place seeds ---
+  const seeds = [];
+  let seedTries = 0;
+
+  while (seeds.length < seedCount && seedTries < 3000){
+    seedTries++;
+  
+    const s = centeredDot();   // <<<<<< no "anywhere" seeds
+    if (staticOcc.occD[dId(N,s.x,s.y)]) continue;
+    if (!hasFreeNeighbor(N, staticOcc, s.x, s.y)) continue;
+  
+	const blobCx = (blobBB.minX + blobBB.maxX) * 0.5;
+	const blobCy = (blobBB.minY + blobBB.maxY) * 0.5;
+
+	// pick style
+	const baseStyle = (rng() < 0.85) ? STYLE_STITCH : STYLE_BITE;
+
+	// clone + inject centerPull (don’t mutate the constants)
+	const style = {
+	  ...baseStyle,
+	  centerPull: {
+		cx: blobCx,
+		cy: blobCy,
+		p: (baseStyle === STYLE_STITCH) ? 0.45 : 0.25
+	  }
+	};
+
+	const verts = growArrowVerticesInFreeSpace(rng, N, style, staticOcc, start);
+    if (!verts) continue;
+  
+    const arrow = buildArrowFromVertices(N, verts);
+    if (!arrow) continue;
+    if (arrow.chain.length < 9) continue;
+    if (violatesSelfAim(N, arrow)) continue;
+  
+    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
+    if (!sim.ok) continue;
+  
+    occupyStatic(staticOcc, arrow, 1);
+    arrows.push(arrow);
+    seeds.push({x:s.x,y:s.y});
+	blobBB = initBBoxFromArrow(arrow);
+  }
+  
+
+  // If we couldn’t place seeds, bail to avoid empty levels
+  if (arrows.length < 1){
+    return { N, arrows };
+  }
+  if (!blobBB) blobBB = initBBoxFromArrow(arrows[0]);
+  // --- Frontier growth loop ---
+  let frontier = buildFrontier(N, staticOcc);
+  let sinceRefresh = 0;
+
+  let fails = 0;
+  const maxFails = Math.max(N*N*10, 24000);
+  let frontierRefreshEvery = 3;
+
+  while (arrows.length < maxArrows && fails < maxFails){
+    if (!frontier.length) break;
+
+    // periodic refresh to keep frontier accurate
+    if (sinceRefresh >= frontierRefreshEvery){
+      frontier = buildFrontier(N, staticOcc);
+      sinceRefresh = 0;
+      if (!frontier.length) break;
     }
-    if (!anyCandidate) break;
 
-    // choose a random candidate empty dot
-    let start = pickStartInLargestComponent(rng, N, staticOcc);
-	if (!start) break;
+    // pick a start near one of the seeds
+    // Occasionally force exploration away from the current colony
+	const mode = (rng() < 0.80) ? "expand" : "fill";
+	const start = pickFrontierByBlobRim(rng, N, frontier, blobBB, mode);
+	
+    if (!start) { fails++; continue; }
 
-    const style = {
-      maxTurns: 140,
-      minSeg: 2,
-      maxSeg: 10,
-      allowStraightChance: 0.08,
-      minEdges: 2,
-	  startBias: "center",
-	  borderMargin: 3
-    };
+    // alternate between "bite into void" and "stitch along edges"
+	const style = (rng() < 0.85) ? STYLE_STITCH : STYLE_BITE;
 
     const verts = growArrowVerticesInFreeSpace(rng, N, style, staticOcc, start);
-    if (!verts) { gapFails++; continue; }
+    if (!verts) { fails++; sinceRefresh++; continue; }
+
     const arrow = buildArrowFromVertices(N, verts);
-    if (!arrow) { gapFails++; continue; }
-    if (arrow.chain.length < 9) { gapFails++; continue; }
-    if (violatesSelfAim(N, arrow)) { gapFails++; continue; }
+    if (!arrow) { fails++; sinceRefresh++; continue; }
+
+    // allow short-ish ones in frontier fill, but keep stubs out
+    if (arrow.chain.length < 5) { fails++; sinceRefresh++; continue; }
+    if (violatesSelfAim(N, arrow)) { fails++; sinceRefresh++; continue; }
 
     const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
-    if (!sim.ok) { gapFails++; continue; }
+    if (!sim.ok) { fails++; sinceRefresh++; continue; }
 
     occupyStatic(staticOcc, arrow, 1);
     arrows.push(arrow);
-    gapFails = 0;
-  }
+    expandBBoxWithArrow(blobBB, arrow);
+    // “re-seed” occasionally so growth doesn’t collapse into one region
+    if (rng() < 0.015){
+	  const head = arrow.chain[arrow.chain.length - 1];
+	  const tail = arrow.chain[0];
 
-  return { N: N, arrows: arrows };
+	  // Always anchor the new head (where we just expanded).
+	  seeds.push({ x: head.x, y: head.y });
+
+	  // Often anchor the tail too (helps wrap around and avoid "fan rays").
+	  if (rng() < 0.60) seeds.push({ x: tail.x, y: tail.y });
+
+	  // Sometimes anchor a random interior point to keep variety.
+	  if (rng() < 0.25) {
+		const p = arrow.chain[(rng() * arrow.chain.length) | 0];
+		seeds.push({ x: p.x, y: p.y });
+	  }
+
+	  // Keep more anchors than before.
+	  while (seeds.length > 64) seeds.shift();
+	}
+
+    // successes reset fail counter and slowly reduce refresh cost
+    fails = 0;
+    sinceRefresh++;
+  }
+  // --- Phase A2: Edge sweep fill (cheap + effective) ---
+if (false){
+  const edgeBand = Math.max(2, Math.floor(N * 0.10)); // N=70 => 7
+  const EDGE_STYLE = {
+    maxTurns: 160,
+    minSeg: 2,
+    maxSeg: 9,
+    turnEvery: 2,
+    turnChance: 0.90,
+    allowStraightChance: 0.06,
+  
+    interiorBias: 0.12,   // NEW: a little openness preference
+    boundaryBias: 0.55,   // was 0.80 (too clingy)
+  
+    minEdges: 2,
+    startBias: "any",
+    borderMargin: 0
+  };
+
+  let edgeFrontier = buildEdgeFrontier(N, staticOcc, edgeBand);
+  let edgeFails = 0;
+  const edgeFailLimit = Math.max(N*N*4, 8000);
+
+  while (edgeFrontier.length && edgeFails < edgeFailLimit && arrows.length < maxArrows){
+    const start = pickEdgeFrontier(rng, edgeFrontier);
+    if (!start) break;
+
+    const verts = growArrowVerticesInFreeSpace(rng, N, EDGE_STYLE, staticOcc, start);
+    if (!verts){ edgeFails++; if ((edgeFails % 12)===0) edgeFrontier = buildEdgeFrontier(N, staticOcc, edgeBand); continue; }
+
+    const arrow = buildArrowFromVertices(N, verts);
+    if (!arrow){ edgeFails++; continue; }
+
+    // allow small-ish edge fillers, but no stubs
+    if (arrow.chain.length < 5){ edgeFails++; continue; }
+    if (violatesSelfAim(N, arrow)){ edgeFails++; continue; }
+
+    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
+    if (!sim.ok){ edgeFails++; continue; }
+
+    occupyStatic(staticOcc, arrow, 1);
+    arrows.push(arrow);
+
+    edgeFails = 0;
+    // refresh occasionally
+    if ((arrows.length % 8)===0) edgeFrontier = buildEdgeFrontier(N, staticOcc, edgeBand);
+  }
 }
+  
+  
+  return { N, arrows };
+}
+
 
 /* ---------- Scoring (coverage + variety) ---------- */
 function scoreLevel(level){
@@ -841,6 +1453,7 @@ function scoreLevel(level){
   const stats = largestEmptyComponentStats(N, level);
   const largestEmptyFrac = stats.largest / totalDots;
   const secondEmptyFrac  = stats.second  / totalDots;
+  const emptyFrac        = stats.emptyCount / totalDots;
 
   // NEW: reward *some* very long hero strokes (but cap it)
   const heroBonus = Math.min(1, veryLong / 3) * 0.55;
@@ -855,42 +1468,369 @@ function scoreLevel(level){
     heroBonus        * 1.0 -
     microPenalty     * 2.8 -
     borderPenalty    * 2.6 -
-    largestEmptyFrac * 7.0 -
-    secondEmptyFrac  * 2.5 +
+    emptyFrac        * 4.0 -
+    largestEmptyFrac * 10.0 -
+    secondEmptyFrac  * 4.0 +
     level.arrows.length * 0.00015
   );
 }
 
-/* ---------- Worker search loop ---------- */
-function runSearch(msg){
-  const myJob = msg.jobId;
-  const N = msg.N|0;
-  const seedBase = msg.seed|0;
-  const timeMs = msg.timeMs|0;
+/* ---------- Incremental improvement helpers ---------- */
 
-  const tEnd = performance.now() + Math.max(200, timeMs);
+// Rebuild staticOcc from an arrows array (safe, simpler; optimize later)
+function rebuildOccFromArrows(N, arrows){
+  const occ = makeOcc(N);
+  for (let i=0;i<arrows.length;i++){
+    occupyStatic(occ, arrows[i], 1);
+  }
+  return occ;
+}
 
-  let best = null;
-  let iter = 0;
-
-  while (performance.now() < tEnd){
-    iter++;
-    const seed = (seedBase + iter*99991) | 0;
-    const level = generateLevelFillUntilStuck(N, seed);
-    if (!level || !level.arrows || level.arrows.length < 5) continue;
-
-    const score = scoreLevel(level);
-    if (!best || score > best.score){
-      best = { score: score, level: level, solution: null };
-      self.postMessage({ type:"best", jobId: myJob, best: best });
+// Compute dot-occupancy from arrows (for void analysis)
+function buildOccDFromArrows(N, arrows){
+  const occD = new Uint8Array(N*N);
+  for (let i=0;i<arrows.length;i++){
+    const ch = arrows[i].chain;
+    for (let k=0;k<ch.length;k++){
+      const p = ch[k];
+      occD[dId(N,p.x,p.y)] = 1;
     }
+  }
+  return occD;
+}
 
-    if (jobId !== myJob) return;
+// Return an array of dotIds belonging to the *largest* empty component
+function largestEmptyComponentDots(N, occD){
+  const seen = new Uint8Array(N*N);
+  let best = null;
+  let bestSize = 0;
+
+  // BFS queue (dot ids)
+  const q = new Int32Array(N*N);
+
+  for (let y=0;y<N;y++){
+    for (let x=0;x<N;x++){
+      const id0 = dId(N,x,y);
+      if (occD[id0] || seen[id0]) continue;
+
+      let head = 0, tail = 0;
+      q[tail++] = id0;
+      seen[id0] = 1;
+
+      // store component ids in a normal array (size varies)
+      const comp = [];
+      while (head < tail){
+        const id = q[head++];
+        comp.push(id);
+
+        const cx = id % N;
+        const cy = (id / N) | 0;
+
+        // 4-neighborhood
+        let nid;
+
+        if (cx+1 < N){
+          nid = id + 1;
+          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
+          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
+        }
+        if (cx-1 >= 0){
+          nid = id - 1;
+          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
+          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
+        }
+        if (cy+1 < N){
+          nid = id + N;
+          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
+          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
+        }
+        if (cy-1 >= 0){
+          nid = id - N;
+          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
+          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
+        }
+      }
+
+      if (comp.length > bestSize){
+        bestSize = comp.length;
+        best = comp;
+      }
+    }
+  }
+  return best || [];
+}
+
+// Score how much an arrow borders a given empty-set (higher => good candidate to remove)
+function arrowBorderScore(N, arrow, emptyMark){
+  let s = 0;
+  const ch = arrow.chain;
+  for (let i=0;i<ch.length;i++){
+    const p = ch[i];
+    const x = p.x, y = p.y;
+
+    // check 4 neighbors; if empty, count it
+    if (x>0   && emptyMark[dId(N,x-1,y)]) s++;
+    if (x<N-1 && emptyMark[dId(N,x+1,y)]) s++;
+    if (y>0   && emptyMark[dId(N,x,y-1)]) s++;
+    if (y<N-1 && emptyMark[dId(N,x,y+1)]) s++;
+  }
+  return s;
+}
+
+// Remove k arrows biased to those bordering largest void
+function removeVoidBoundaryArrows(rng, N, arrows, k){
+  if (arrows.length <= k) return arrows.slice(0, Math.max(0, arrows.length-k));
+
+  const occD = buildOccDFromArrows(N, arrows);
+  const voidDots = largestEmptyComponentDots(N, occD);
+  if (!voidDots.length) return arrows.slice();
+
+  const emptyMark = new Uint8Array(N*N);
+  for (let i=0;i<voidDots.length;i++) emptyMark[voidDots[i]] = 1;
+
+  // Score each arrow; keep top candidates
+  const scored = [];
+  for (let i=0;i<arrows.length;i++){
+    const sc = arrowBorderScore(N, arrows[i], emptyMark);
+    if (sc > 0) scored.push({i, sc});
+  }
+  if (!scored.length) return arrows.slice();
+
+  scored.sort((a,b)=>b.sc-a.sc);
+
+  // pick removals from top M with slight randomness
+  const M = Math.min(scored.length, Math.max(8, k*6));
+  const pickPool = scored.slice(0, M);
+
+  const removeSet = new Uint8Array(arrows.length);
+  let removed = 0;
+  while (removed < k && pickPool.length){
+    // biased random: square
+    const r = rng(); 
+    const idx = Math.floor((r*r) * pickPool.length);
+    const ai = pickPool[idx].i;
+
+    if (!removeSet[ai]){
+      removeSet[ai] = 1;
+      removed++;
+    }
+    pickPool.splice(idx, 1);
   }
 
-  self.postMessage({ type:"done", jobId: myJob, best: best });
+  const kept = [];
+  for (let i=0;i<arrows.length;i++){
+    if (!removeSet[i]) kept.push(arrows[i]);
+  }
+  return kept;
 }
-`;
+
+// Run your gap-fill phase on an existing (partial) board
+function gapFillFromOcc(rng, N, staticOcc, arrows, budgetIters){
+  let gapFails = 0;
+  const gapFailLimit = Math.max(budgetIters|0, N*N*2);
+
+  while (gapFails < gapFailLimit){
+	let anyEmpty = false;
+	let anyStartable = false;
+
+	for (let y=0;y<N;y++){
+	  for (let x=0;x<N;x++){
+		if (!staticOcc.occD[dId(N,x,y)]) {
+		  anyEmpty = true;
+		  if (hasFreeNeighbor(N, staticOcc, x, y)) { anyStartable = true; break; }
+		}
+	  }
+	  if (anyStartable) break;
+	}
+	if (!anyEmpty) break;
+	if (!anyStartable) break;
+
+    const start = pickStartInLargestComponent(rng, N, staticOcc);
+    if (!start) break;
+
+	const lakeMode = (rng() < 0.75);
+
+	const style = lakeMode ? {
+	  // invade the biggest void
+	  maxTurns: 220,
+	  minSeg: 2,
+	  maxSeg: 10,
+	  turnEvery: 2,
+	  turnChance: 0.88,
+	  allowStraightChance: 0.06,
+
+	  interiorBias: 0.85,
+	  boundaryBias: 0.00,
+
+	  minEdges: 2,
+	  startBias: "center",
+	  borderMargin: 0
+	} : {
+	  // stitch small pockets after the lake is reduced
+	  maxTurns: 160,
+	  minSeg: 2,
+	  maxSeg: 6,
+	  turnEvery: 2,
+	  turnChance: 0.92,
+	  allowStraightChance: 0.04,
+
+	  interiorBias: 0.00,
+	  boundaryBias: 0.70,
+
+	  minEdges: 2,
+	  startBias: "any",
+	  borderMargin: 0
+	};
+
+
+    const verts = growArrowVerticesInFreeSpace(rng, N, style, staticOcc, start);
+    if (!verts) { gapFails++; continue; }
+
+    const arrow = buildArrowFromVertices(N, verts);
+    if (!arrow) { gapFails++; continue; }
+    if (arrow.chain.length < 5) { gapFails++; continue; }
+    if (violatesSelfAim(N, arrow)) { gapFails++; continue; }
+
+    // Important: solvable given current occupancy
+    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
+    if (!sim.ok) { gapFails++; continue; }
+
+    occupyStatic(staticOcc, arrow, 1);
+    arrows.push(arrow); // append (preserves reverse-order solvability)
+    gapFails = 0;
+  }
+}
+
+// Build a list of "frontier" empty dots: empty and startable, adjacent to occupied stuff.
+function occupiedNeighborCount(N, staticOcc, x, y){
+  let s = 0;
+  if (x > 0   && staticOcc.occD[dId(N, x-1, y)]) s++;
+  if (x < N-1 && staticOcc.occD[dId(N, x+1, y)]) s++;
+  if (y > 0   && staticOcc.occD[dId(N, x, y-1)]) s++;
+  if (y < N-1 && staticOcc.occD[dId(N, x, y+1)]) s++;
+  return s; // 0..4, *no border counting*
+}
+
+function buildFrontier(N, staticOcc){
+  const out = [];
+  for (let y=0;y<N;y++){
+    for (let x=0;x<N;x++){
+      const id = dId(N,x,y);
+      if (staticOcc.occD[id]) continue;
+      if (!hasFreeNeighbor(N, staticOcc, x, y)) continue;
+
+      // CRITICAL: must touch existing occupancy (blob adjacency)
+      const adj = occupiedNeighborCount(N, staticOcc, x, y);
+      if (adj <= 0) continue;
+
+      // Keep the "stitchiness" score around (how trapped it is)
+      // (this can still treat borders as occupied if you like)
+      const sc = neighborOccScore(N, staticOcc, x, y);
+
+      out.push({ x, y, sc, adj });
+    }
+  }
+  return out;
+}
+
+
+function manhattan(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+
+// Pick a frontier point biased toward being near one of the seeds.
+// Also mildly biases toward deeper interior (higher borderDist) so we don't only paint edges.
+function pickFrontierNearSeeds(rng, N, frontier, seeds){
+  if (!frontier.length) return null;
+
+  const SAMP = Math.min(frontier.length, 160);
+  let best = null;
+  let bestScore = Infinity;
+
+  for (let i=0;i<SAMP;i++){
+    const p = frontier[(rng()*frontier.length)|0];
+
+    // distance to nearest seed (NOT a random seed)
+    let minDist = 1e9;
+    for (let s=0;s<seeds.length;s++){
+      const dx = Math.abs(p.x - seeds[s].x);
+      const dy = Math.abs(p.y - seeds[s].y);
+      const d = dx + dy;
+      if (d < minDist) minDist = d;
+    }
+
+    const bd = borderDist(N, p.x, p.y);   // interior preference
+    const stitch = (4 - p.sc);            // prefer higher sc a bit (lower stitch)
+
+    // Lower is better:
+    // - minDist small = near *some* seed (good)
+    // - stitch small = more "stitchy" (good)
+    // - bd large = interior (good)
+    const score = minDist * 1.0 + stitch * 0.8 - bd * 0.20 + rng()*0.25;
+
+    if (score < bestScore){
+      bestScore = score;
+      best = p;
+    }
+  }
+
+  return best ? {x:best.x, y:best.y} : null;
+}
+// Pick a frontier point that is FAR from the current colony (exploration mode).
+// We maximize distance-to-nearest-seed (with a mild preference for interior).
+function pickFrontierFarFromSeeds(rng, N, frontier, seeds){
+  if (!frontier.length) return null;
+
+  const SAMP = Math.min(frontier.length, 256);
+  let best = null;
+  let bestScore = -Infinity;
+
+  for (let i=0;i<SAMP;i++){
+    const p = frontier[(rng()*frontier.length)|0];
+
+    // distance to nearest seed
+    let dmin = Infinity;
+    for (let s=0; s<seeds.length; s++){
+      const sd = Math.abs(p.x - seeds[s].x) + Math.abs(p.y - seeds[s].y);
+      if (sd < dmin) dmin = sd;
+    }
+
+    const bd = borderDist(N, p.x, p.y);   // higher is more interior
+    // score: prefer far-from-colony, slightly prefer interior, and a little randomness
+    const score = dmin * 1.0 + bd * 0.25 + rng() * 0.5;
+
+    if (score > bestScore){
+      bestScore = score;
+      best = p;
+    }
+  }
+
+  return best ? {x:best.x, y:best.y} : null;
+}
+
+
+/* ---------- Worker search loop (incremental hill-climb) ---------- */
+function runSearch(msg){
+  const myJob   = msg.jobId;
+  const N       = msg.N|0;
+  const seedBase= msg.seed|0;
+  const timeMs  = msg.timeMs|0;
+
+  const rng = mulberry32(seedBase);
+  const tEnd = performance.now() + Math.max(300, timeMs);
+
+  // Stage A: get an initial decent candidate fast
+
+let bestLevel = generateLevelBlobThenCrop(N, seedBase|0);
+if (!bestLevel || !bestLevel.arrows || bestLevel.arrows.length < 5){
+  self.postMessage({ type:"done", jobId: myJob, best: null });
+  return;
+}
+let bestScore = scoreLevel(bestLevel);
+self.postMessage({ type:"best", jobId: myJob, best: { score: bestScore, level: bestLevel, solution: null } });
+
+// DONE — no Stage B on cropped boards
+self.postMessage({ type:"done", jobId: myJob, best: { score: bestScore, level: bestLevel, solution: null } });
+
+}`;
 
 
 
@@ -1122,7 +2062,8 @@ function startSearch({N, seed}){
   let doneCount = 0;
 
   // give it more time; density is a hard optimization problem
-  const timeMs = 2500;
+  const timeMs = (navigator.userAgent.includes("Android") || navigator.userAgent.includes("iPhone")) ? 2500 : 5000;
+
 
   pool.forEach((w, i) => {
     w.onmessage = (e) => {
@@ -1181,102 +2122,185 @@ function rebuildOccWithoutArrow(N, arrows, skipId){
 }
 
 function startMove(id){
-  const a=game.arrows[id];
+  const a = game.arrows[id];
   if (!a || !a.alive) return;
 
-  game.debugCollision=null;
+  game.debugCollision = null;
 
   const occWithoutSelf = rebuildOccWithoutArrow(game.N, game.arrows, id);
   const sim = simulateSnakeExit(game.N, occWithoutSelf, a, game.N + a.chain.length + 80);
 
-  game.anim={
-    arrowId:id,
-    dir:dirByKey(a.dir),
-    startedAt:performance.now(),
-    speedDotsPerSec:120,
-    chain: a.chain.map(p=>({x:p.x,y:p.y})),
-    prevChain: a.chain.map(p=>({x:p.x,y:p.y})),
-    nextChain: a.chain.map(p=>({x:p.x,y:p.y})),
-    stepCount:0,
+  game.anim = {
+    arrowId: id,
+    dir: dirByKey(a.dir),
+
+    // forward motion timing
+    startedAt: performance.now(),
+    speedDotsPerSec: 30,
+    alpha: 0,
+    stepCount: 0,
+
+    // the chain we animate (mutable)
+    chain: a.chain.map(p => ({x:p.x, y:p.y})),
+
+    // prev/next snapshots for interpolation
+    prevChain: a.chain.map(p => ({x:p.x, y:p.y})),
+    nextChain: a.chain.map(p => ({x:p.x, y:p.y})),
+
+    // collision info
     willCollide: !sim.ok,
     collideAtStep: sim.ok ? null : sim.steps,
     collision: sim.ok ? null : sim.collision,
-    phase:"forward",
-    bounceStartAt:null,
-    bounceDuration:0.10,
-    alpha:0,
-    originChain: a.chain.map(p=>({x:p.x,y:p.y})),
+
+    // phase control
+    phase: "forward",
+
+    // HISTORY: one record per forward step so we can undo perfectly
+    history: [], // each: { tail:{x,y}, head:{x,y} }
+
+    // bounce settings
+    bounceSpeedMul: 1.3,
+    bounceStartedAt: null,
+    bounceStepsDone: 0,
+
+    // snapback target: how many steps to undo (we'll compute at collision)
+    bounceTargetSteps: 0,
+
+    // original chain for snap-back (after bounce)
+    originChain: a.chain.map(p => ({x:p.x, y:p.y})),
   };
+
   requestAnimationFrame(tick);
 }
 
 function interpChainForDraw(){
-  const anim=game.anim;
+  const anim = game.anim;
   if (!anim) return null;
 
-  const a=anim.alpha;
-  const chain=[];
-  for (let i=0;i<anim.nextChain.length;i++){
-    const p0=anim.prevChain[i]||anim.nextChain[i];
-    const p1=anim.nextChain[i];
-    chain.push({x:p0.x+(p1.x-p0.x)*a, y:p0.y+(p1.y-p0.y)*a});
+  // Nokia-snake rule:
+  // keep every corner perfectly 90° by snapping all intermediate vertices to integer grid.
+  // Only the head moves fractionally along its current direction (and optionally the tail).
+  const a = Math.max(0, Math.min(1, anim.alpha || 0));
+
+  const chain = anim.chain;           // integer grid positions (after last committed step)
+  const out = chain.map(p => ({ x: p.x, y: p.y }));
+
+  const n = out.length;
+  if (n < 2) return out;
+
+  // Move head fractionally forward along direction.
+  // We do NOT move other points, so corners stay rigid.
+  const dir = anim.dir;
+  out[n - 1] = {
+    x: out[n - 1].x + dir.dx * a,
+    y: out[n - 1].y + dir.dy * a
+  };
+
+  // Optional: move tail fractionally forward too (so the whole snake "slides").
+  // This still keeps corners crisp because the tail segment is straight.
+  // If you want the tail to stay perfectly snapped, set this to false.
+  const SLIDE_TAIL = true;
+
+  if (SLIDE_TAIL && n >= 2){
+    // tail moves toward second point
+    const t0 = out[0];
+    const t1 = out[1];
+    const dx = Math.sign(t1.x - t0.x);
+    const dy = Math.sign(t1.y - t0.y);
+    out[0] = { x: t0.x + dx * a, y: t0.y + dy * a };
   }
-  if (anim.phase==="bounce"){
-    const b=anim.bounceBlend ?? 0;
-    const out=[];
-    for (let i=0;i<chain.length;i++){
-      const p=chain[i];
-      const o=anim.originChain[i] || anim.originChain[anim.originChain.length-1];
-      out.push({x:p.x+(o.x-p.x)*b, y:p.y+(o.y-p.y)*b});
-    }
-    return out;
-  }
-  return chain;
+
+  return out;
 }
+
 
 function tick(now){
   if (!game || !game.anim) return;
-  const anim=game.anim;
+  const anim = game.anim;
+  const arrow = game.arrows[anim.arrowId];
+  if (!arrow) { game.anim = null; return; }
 
-  if (anim.phase==="forward"){
-    const dt=(now-anim.startedAt)/1000;
-    const pos=dt*anim.speedDotsPerSec;
-    const step=Math.floor(pos);
-    const frac=pos-step;
+  // -------------------------
+  // FORWARD
+  // -------------------------
+  if (anim.phase === "forward"){
+    const dt = (now - anim.startedAt) / 1000;
+    const pos = dt * anim.speedDotsPerSec;
+    const targetStep = Math.floor(pos);
+    anim.alpha = pos - targetStep;
 
-    while (anim.stepCount < step){
+    while (anim.stepCount < targetStep){
+      // If we are about to collide, trigger bounce WITHOUT doing the colliding step.
       if (anim.willCollide && anim.stepCount >= anim.collideAtStep){
-        const a=game.arrows[anim.arrowId];
-        a.blocked=true;
-        game.debugCollision=anim.collision;
+        // turn red immediately
+        arrow.blocked = true;
+        game.debugCollision = anim.collision;
 
         game.strikes++;
         updateHud();
-        if (game.strikes>=3) alert("Game over (3 strikes).");
+        if (game.strikes >= strikesAllowed) alert("Game over ("+strikesAllowed+" strikes).");
 
-        anim.phase="bounce";
-        anim.bounceStartAt=now;
-        break;
+        // Decide how far to bounce back:
+        // "reverse to just before the last corner" = undo the last straight run - 1.
+        // We can compute last straight run from the CURRENT chain.
+        const ch = anim.chain;
+        const n = ch.length;
+
+        let runEdges = 1;
+        for (let i = n - 1; i >= 2; i--){
+          const dx1 = ch[i].x - ch[i-1].x;
+          const dy1 = ch[i].y - ch[i-1].y;
+          const dx0 = ch[i-1].x - ch[i-2].x;
+          const dy0 = ch[i-1].y - ch[i-2].y;
+          if (dx1 === dx0 && dy1 === dy0) runEdges++;
+          else break;
+        }
+
+        // Undo almost to the corner, clamp to keep it snappy.
+        // Also cannot undo more than we actually moved.
+        const want = Math.max(1, Math.min(runEdges - 1, 10));
+        anim.bounceTargetSteps = Math.min(want, anim.history.length);
+
+        anim.phase = "bounce";
+        anim.bounceStartedAt = now;
+        anim.bounceStepsDone = 0;
+
+        // Set interpolation to "no movement" at the moment of collision
+        anim.prevChain = anim.chain.map(p => ({x:p.x, y:p.y}));
+        anim.nextChain = anim.chain.map(p => ({x:p.x, y:p.y}));
+        anim.alpha = 0;
+
+        draw();
+        requestAnimationFrame(tick);
+        return;
       }
 
-      anim.prevChain = anim.chain.map(p=>({x:p.x,y:p.y}));
+      // Normal forward step:
+      // Save snapshots for interpolation
+      anim.prevChain = anim.chain.map(p => ({x:p.x, y:p.y}));
 
+      // Record history to allow perfect undo
+      const tail = anim.chain[0];
+      const head = anim.chain[anim.chain.length - 1];
+      const newHead = { x: head.x + anim.dir.dx, y: head.y + anim.dir.dy };
+      anim.history.push({ tail: {x:tail.x, y:tail.y}, head: {x:newHead.x, y:newHead.y} });
+
+      // Apply snake step
       anim.chain.shift();
-      const head=anim.chain[anim.chain.length-1];
-      anim.chain.push({x: head.x+anim.dir.dx, y: head.y+anim.dir.dy});
+      anim.chain.push(newHead);
 
-      anim.nextChain = anim.chain.map(p=>({x:p.x,y:p.y}));
+      anim.nextChain = anim.chain.map(p => ({x:p.x, y:p.y}));
+
       anim.stepCount++;
     }
-    anim.alpha=frac;
 
+    // Win condition
     if (!anim.willCollide && allOut(game.N, anim.chain)){
-      const a=game.arrows[anim.arrowId];
-      a.alive=false;
-      game.anim=null;
+      arrow.alive = false;
+      game.anim = null;
       updateHud();
       draw();
-      if (game.arrows.every(x=>!x.alive)) alert("Cleared! 🎯");
+      if (game.arrows.every(x => !x.alive)) alert("Cleared! 🎯");
       return;
     }
 
@@ -1285,20 +2309,52 @@ function tick(now){
     return;
   }
 
-  if (anim.phase==="bounce"){
-    const t=(now-anim.bounceStartAt)/1000;
-    const k=Math.min(1, t/anim.bounceDuration);
-    const e=1-Math.pow(1-k,3);
-    anim.bounceBlend=e;
+  // -------------------------
+  // BOUNCE (perfect undo)
+  // -------------------------
+  if (anim.phase === "bounce"){
+    if (anim.bounceStartedAt == null) anim.bounceStartedAt = now;
+
+    const bounceDps = anim.speedDotsPerSec * (anim.bounceSpeedMul || 1.3);
+    const dt = (now - anim.bounceStartedAt) / 1000;
+    const targetUndo = Math.min(anim.bounceTargetSteps, Math.floor(dt * bounceDps));
+
+    while (anim.bounceStepsDone < targetUndo){
+      if (anim.history.length === 0) break;
+
+      anim.prevChain = anim.chain.map(p => ({x:p.x, y:p.y}));
+
+      const rec = anim.history.pop(); // last forward step
+      // Undo: remove head, re-add tail
+      anim.chain.pop();
+      anim.chain.unshift({ x: rec.tail.x, y: rec.tail.y });
+
+      anim.nextChain = anim.chain.map(p => ({x:p.x, y:p.y}));
+
+      anim.bounceStepsDone++;
+      anim.stepCount = Math.max(0, anim.stepCount - 1);
+    }
+
+    // Interpolate within the current undo step
+    // (Use fractional time to keep it smooth)
+    const fracPos = (dt * bounceDps) - targetUndo;
+    anim.alpha = Math.max(0, Math.min(1, fracPos));
+
     draw();
-    if (k>=1){
-      game.anim=null;
+
+    if (anim.bounceStepsDone >= anim.bounceTargetSteps || anim.history.length === 0){
+      // Snap back to original placement (still red)
+      arrow.chain = anim.originChain.map(p => ({x:p.x, y:p.y}));
+      game.anim = null;
       draw();
       return;
     }
+
     requestAnimationFrame(tick);
+    return;
   }
 }
+
 
 /* ---------- Hit testing (click anywhere) ---------- */
 function distPointToSegment2(px,py,x0,y0,x1,y1){
@@ -1453,40 +2509,55 @@ function draw(){
   ctx.restore();
 
   // arrows
+
   for (const a of game.arrows){
     if (!a.alive) continue;
 
-    const isMoving = game.anim && game.anim.arrowId===a.id;
-    const color = (a.blocked && !isMoving) ? "#b33" : "#0b1530";
+    const isMoving = game.anim && game.anim.arrowId === a.id;
+    const color = a.blocked ? "#b33" : "#0b1530";
 
-    ctx.lineWidth = Math.max(2.0, cell * 0.28);
-    ctx.lineJoin="round";
-    ctx.lineCap="round";
-    ctx.strokeStyle=color;
+    ctx.lineWidth   = Math.max(2.0, cell * 0.28);
+    ctx.lineJoin    = "miter";
+    ctx.miterLimit  = 10;
+    ctx.lineCap     = "butt";
+    ctx.strokeStyle = color;
 
     const chain = isMoving ? interpChainForDraw() : a.chain;
-    const n=chain.length;
+    const n = chain.length;
     if (n < 2) continue;
 
-    const p0=chain[n-2], p1=chain[n-1];
-    const ux=Math.sign(p1.x-p0.x), uy=Math.sign(p1.y-p0.y);
+    const p0 = chain[n-2], p1 = chain[n-1];
+    const ux = Math.sign(p1.x - p0.x), uy = Math.sign(p1.y - p0.y);
 
     const tipX = sx(p1.x), tipY = sy(p1.y);
     const headLen = Math.max(9, cell * 0.9);
-    const headW = headLen * 0.55;
+    const headW   = headLen * 0.55;
     const baseX = tipX - ux * headLen;
     const baseY = tipY - uy * headLen;
 
-    ctx.beginPath();
-    for (let i=0;i<n;i++){
-      const p=chain[i];
-      let x = sx(p.x), y = sy(p.y);
-      if (i===n-1){ x = baseX; y = baseY; }
-      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    // draw each segment separately
+    for (let i=1;i<n;i++){
+      const q0 = chain[i-1];
+      const q1 = chain[i];
+
+      let x0 = sx(q0.x), y0 = sy(q0.y);
+      let x1 = sx(q1.x), y1 = sy(q1.y);
+
+      // shorten last segment to stop at head base
+      if (i === n-1){
+        x1 = baseX;
+        y1 = baseY;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
     }
-    ctx.stroke();
+
     drawArrowHead(ctx, tipX, tipY, ux, uy, headLen, headW, color);
   }
+
 }
 
 
@@ -1595,8 +2666,8 @@ function resetViewFit(){
 }
 
 document.getElementById("newBtn").addEventListener("click", ()=>{
-  try { resetGame(); }
-  catch(e){ console.error(e); alert(e.message || "Error."); }
+  document.getElementById("sIn").value = (Math.random()*2**31)|0;
+  resetGame();
 });
 document.getElementById("zoomInBtn").addEventListener("click", ()=>{
   setZoom(view.zoom * 1.2);
