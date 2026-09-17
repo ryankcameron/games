@@ -33,6 +33,7 @@
 		input { background:transparent; border:0; color:var(--ink); font-size:13px; font-weight:600; padding:4px 0; min-width:0; }
 		#sizeInput { width:44px; }
 		#seedInput { width:88px; }
+		#difficultyInput { width:28px; }
 		#speedInput { width:42px; }
 		.unit { margin-left:-4px; color:var(--muted); font-size:11px; }
 		input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
@@ -134,6 +135,7 @@
 			<form id="settingsForm" class="settings">
 				<label class="field">Grid <input id="sizeInput" aria-label="Grid size, 8 to 200" type="number" min="8" max="200" step="1" value="30" required></label>
 				<label class="field">Seed <input id="seedInput" aria-label="Puzzle seed" type="number" min="0" max="4294967295" step="1" value="42" required></label>
+				<label class="field">Difficulty <input id="difficultyInput" aria-label="Puzzle difficulty, 1 to 10" type="number" min="1" max="10" step="1" value="7" required></label>
 				<label class="field">Speed <input id="speedInput" aria-label="Arrow movement speed in dots per second" type="number" min="5" max="200" step="5" value="60" required><span class="unit">dots/s</span></label>
 				<button id="loadBtn" type="submit" title="Generate the selected grid and seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Load</span><span class="sr-only"> selected seed</span></button>
 			</form>
@@ -192,7 +194,7 @@
 				<p>Check the <strong>entire line from the head to the edge</strong>. Another arrow anywhere on that line blocks the move. A blocked arrow comes back and costs one mistake.</p>
 				<p>Clear every arrow before making nine mistakes. There is no timer, and any legal move is safe to make.</p>
 				<p><strong>Move around:</strong> drag to pan, scroll or pinch to zoom, F to fit. H highlights a legal move; Enter plays it. Z undoes a move or mistake. R replays this puzzle.</p>
-				<p>Every puzzle uses every dot exactly once and has a checked solution. The same grid size and seed reproduce the same board. Works offline.</p>
+				<p>Every puzzle uses every dot exactly once and has a checked solution. The same grid size, seed, and difficulty reproduce the same board. Higher difficulty builds longer, more tangled paths and deeper blocker chains. Works offline.</p>
 			</div>
 		</details>
 	</footer>
@@ -224,10 +226,28 @@ function createEngine() {
 			return ((r ^ r >>> 14) >>> 0) / 4294967296;
 		};
 	}
-	function generate(N, seed) {
+	function generate(N, seed, difficulty = 7) {
 		if (!Number.isInteger(N) || N < 8 || N > 200) throw new RangeError('Grid size must be an integer from 8 to 200.');
 		if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) throw new RangeError('Seed must be an integer from 0 to 4294967295.');
+		if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 10) throw new RangeError('Difficulty must be an integer from 1 to 10.');
 		const start = performance.now(), rng = rngFrom(seed);
+		const d = (difficulty - 1) / 9;
+		// Difficulty changes construction itself: higher settings grow longer snakes,
+		// favor turns while joining them, and prefer orientations with more blockers.
+		const absorbPasses = 3 + Math.round(d * 2);
+		const longChance = .06 + d * .18;
+		const shortTargetMin = Math.round(6 - d);
+		const shortTargetSpan = Math.round(11 - d * 5);
+		const longTargetMin = Math.round(18 + d * 28);
+		const longTargetSpan = Math.round(18 + d * 20);
+		const maxTailLength = Math.round(48 + d * 32);
+		const turnBias = .25 + d * 3.2;
+		const foldPasses = 1 + Math.round(d * 4);
+		const foldCandidateMax = Math.round(5 + d * 9);
+		const maxFoldLength = Math.round(64 + d * 32);
+		const blockerWeight = 5 + d * 8;
+		const depthWeight = d * 60;
+		const chainWeight = d * 900;
 		const total = N * N, owner = new Int32Array(total);
 		const tiles = [];
 		for (let y = 0; y < N; y++) {
@@ -302,11 +322,17 @@ function createEngine() {
 			return result;
 		}
 		// Absorb later-removable pieces into an earlier piece's tail. Its exit remains valid.
-		for (let pass = 0; pass < 3; pass++) {
+		for (let pass = 0; pass < absorbPasses; pass++) {
 			for (const id of order) {
 				if (!live[id]) continue;
 				const a = tiles[id];
-				const target = pass === 0 ? 6 + Math.floor(rng()*rng()*34) : 35;
+				if (!a.growTarget) {
+					const ambitious = rng() < longChance;
+					a.growTarget = ambitious
+						? longTargetMin + Math.floor((1-rng()*rng()) * longTargetSpan)
+						: shortTargetMin + Math.floor(rng() * Math.max(1,shortTargetSpan));
+				}
+				const target = a.growTarget;
 				while (a.cells.length < target) {
 					const tail = a.cells[a.cells.length - 1];
 					const prev = a.cells.length > 1 ? tail - a.cells[a.cells.length - 2] : 0;
@@ -315,9 +341,10 @@ function createEngine() {
 						const other = owner[cell], b = tiles[other];
 						if (other === id || !live[other] || b.rank < a.rank) continue;
 						if (b.cells[0] !== cell && b.cells[b.cells.length - 1] !== cell) continue;
-						if (a.cells.length + b.cells.length > 48) continue;
-						if (pass > 0 && a.cells.length >= 6 && b.cells.length >= 6) continue;
-						const score = rng()*2 + (prev !== cell-tail ? 0.45 : 0) + (b.cells.length < 5 ? 0.4 : 0);
+						if (a.cells.length + b.cells.length > maxTailLength) continue;
+						if (pass > 0 && a.cells.length >= 10 + Math.round(10*d) && b.cells.length >= 10 + Math.round(10*d)) continue;
+						const makesTurn = prev && prev !== cell-tail;
+						const score = rng()*2 + (makesTurn ? turnBias : 0) + (b.cells.length < 5 ? .4 : 0) + d*Math.min(1.5,b.cells.length*.05);
 						if (score > bestScore) { bestScore = score; best = {other, cell}; }
 					}
 					if (!best) break;
@@ -331,16 +358,16 @@ function createEngine() {
 		}
 		// Fold small late pieces into an earlier path through a local detour.
 		// Never change its first edge: that edge is the certified exit direction.
-		for (let pass = 0; pass < 3; pass++) {
+		for (let pass = 0; pass < foldPasses; pass++) {
 			for (const id of order) {
-				if (!live[id] || tiles[id].cells.length > 6) continue;
+				if (!live[id] || tiles[id].cells.length > foldCandidateMax) continue;
 				const b = tiles[id];
 				let done = false;
 				for (const reverse of [false, true]) {
 					const bc = reverse ? b.cells.slice().reverse() : b.cells;
 					for (const near of neighbors(bc[0])) {
 						const aid = owner[near], a = tiles[aid];
-						if (aid === id || !live[aid] || a.rank > b.rank || a.cells.length + bc.length > 64) continue;
+						if (aid === id || !live[aid] || a.rank > b.rank || a.cells.length + bc.length > maxFoldLength) continue;
 						const i = a.cells.indexOf(near);
 						if (i < 1 || i >= a.cells.length - 1) continue;
 						const end = bc[bc.length - 1], next = a.cells[i+1];
@@ -361,7 +388,6 @@ function createEngine() {
 		}
 		// Orient the completed paths by peeling again. Prefer newly opened, deeper routes.
 		const options = [], waiting = Array.from({length:arrows.length}, () => []);
-		const free = [];
 		function ray(cells, reverse) {
 			const i = reverse ? cells.length - 1 : 0, j = reverse ? i - 1 : 1;
 			let x = cells[i] % N, y = Math.floor(cells[i]/N);
@@ -373,30 +399,70 @@ function createEngine() {
 				if (id === owner[cells[0]]) return null;
 				blockers.add(id); len++;
 			}
-			return { blockers, len };
+			return { blockers:[...blockers], len };
 		}
 		for (let id = 0; id < arrows.length; id++) for (const reverse of [false,true]) {
 			const r = ray(arrows[id].cells, reverse);
 			if (!r) continue;
 			const oi = options.length;
-			options.push({id, reverse, count:r.blockers.size, score:r.blockers.size * 8 + r.len + rng()*8});
+			options.push({id, reverse, blockers:r.blockers, initialCount:r.blockers.length,
+				score:r.blockers.length * blockerWeight + r.len*(.45+.55*d) + rng()*(10-5*d)});
 			for (const b of r.blockers) waiting[b].push(oi);
-			if (!r.blockers.size) free.push(oi);
 		}
-		const removed = new Uint8Array(arrows.length), solution = [];
-		while (free.length) {
-			let best = 0;
-			for (let i = 1; i < free.length; i++) if (options[free[i]].score > options[free[best]].score) best = i;
-			const option = options[free[best]];
-			free[best] = free[free.length - 1]; free.pop();
-			if (removed[option.id]) continue;
-			removed[option.id] = 1;
-			if (option.reverse) arrows[option.id].cells.reverse();
-			solution.push(option.id);
-			for (const oi of waiting[option.id]) if (--options[oi].count === 0) free.push(oi);
+		// There can be many valid ways to orient the exact same geometry. At higher
+		// difficulty, try several deterministic peel orders and retain the valid one
+		// with the deeper blocker chain. This changes complexity without gambling on
+		// whether the board is solvable: every retained plan is already a full solution.
+		const orientationTrials = 1 + Math.round(d * 11);
+		let bestPlan = null, bestPlanScore = -Infinity;
+		for (let trial = 0; trial < orientationTrials; trial++) {
+			const counts = Int32Array.from(options, o => o.initialCount);
+			const removed = new Uint8Array(arrows.length), chosenDepth = new Int32Array(arrows.length);
+			const chosen = new Int32Array(arrows.length).fill(-1), trialSolution = [], free = [];
+			for (let oi=0; oi<options.length; oi++) if (!counts[oi]) free.push(oi);
+			let lastRemoved = -1, dependencyTotal = 0, maxDepth = 1;
+			function optionDepth(o) {
+				let depth = 1;
+				for (const b of o.blockers) depth = Math.max(depth, chosenDepth[b] + 1);
+				return depth;
+			}
+			while (free.length) {
+				let best = -1, bestValue = -Infinity;
+				for (let i = 0; i < free.length; i++) {
+					const o = options[free[i]];
+					if (removed[o.id]) continue;
+					const depth = optionDepth(o);
+					const followsLast = lastRemoved >= 0 && o.blockers.includes(lastRemoved);
+					const explore = trial ? rng() * (18 + 65*d) : 0;
+					const value = o.score + depth * depthWeight + (followsLast ? chainWeight : 0) + explore;
+					if (value > bestValue) { bestValue = value; best = i; }
+				}
+				if (best < 0) break;
+				const oi = free[best], option = options[oi];
+				free[best] = free[free.length - 1]; free.pop();
+				if (removed[option.id]) continue;
+				removed[option.id] = 1; chosen[option.id] = oi;
+				chosenDepth[option.id] = optionDepth(option);
+				maxDepth = Math.max(maxDepth, chosenDepth[option.id]);
+				dependencyTotal += option.blockers.length;
+				lastRemoved = option.id; trialSolution.push(option.id);
+				for (const wait of waiting[option.id]) if (--counts[wait] === 0) free.push(wait);
+			}
+			if (trialSolution.length !== arrows.length) continue;
+			const planScore = maxDepth * (20 + 160*d) + dependencyTotal * (1 + 5*d);
+			if (planScore > bestPlanScore) {
+				bestPlanScore = planScore;
+				bestPlan = {chosen:Array.from(chosen), solution:trialSolution.slice(), maxDepth};
+			}
 		}
-		if (solution.length !== arrows.length) throw Error('Path orientation failed.');
-		return {N, seed, arrows, solution, ms: performance.now() - start};
+		if (!bestPlan) throw Error('Path orientation failed.');
+		for (let id=0; id<arrows.length; id++) {
+			const option = options[bestPlan.chosen[id]];
+			if (!option) throw Error('Missing path orientation.');
+			if (option.reverse) arrows[id].cells.reverse();
+		}
+		const solution = bestPlan.solution;
+		return {N, seed, difficulty, arrows, solution, ms: performance.now() - start};
 	}
 	function validate(level) {
 		const {N, arrows, solution} = level, owner = new Int32Array(N*N).fill(-1);
@@ -468,7 +534,8 @@ function savePersisted() {
 		const N=game?.N ?? Number($('sizeInput').value);
 		const seed=game?.seed ?? Number($('seedInput').value);
 		const speed=clamp(Number($('speedInput').value)||60,5,200);
-		const payload={version:1,N,seed,speed,view:game?{zoom:view.zoom,cx:view.cx,cy:view.cy}:null};
+		const difficulty=clamp(Math.round(Number($('difficultyInput').value)||7),1,10);
+		const payload={version:1,N,seed,difficulty,speed,view:game?{zoom:view.zoom,cx:view.cx,cy:view.cy}:null};
 		localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
 	} catch(_) { /* Storage can be disabled; the game still works normally. */ }
 }
@@ -573,14 +640,14 @@ function compileLevel(level, elapsed) {
 	dependencies.forEach((ids,id)=>ids.forEach(blocker=>dependents[blocker].push(id)));
 	const counts=Int32Array.from(dependencies,a=>a.length), available=new Set();
 	counts.forEach((n,id)=>{ if(n===0) available.add(id); });
-	return {N,seed:level.seed,arrows,owner,cellIndex,dependencies,dependents,counts,available,
+	return {N,seed:level.seed,difficulty:level.difficulty ?? 7,arrows,owner,cellIndex,dependencies,dependents,counts,available,
 		solution:level.solution.slice(),remaining:arrows.length,strikes:0,history:[],ms:elapsed};
 }
-function loadPuzzle(N, seed) {
+function loadPuzzle(N, seed, difficulty = 7) {
 	stopDemo(); cleanupWorker(); clearEffects();
 	const thisJob=++job, started=performance.now();
 	busy=true; hoverId=-1; hintId=-1; gesture=null; pointers.clear();
-	$('sizeInput').value=N; $('seedInput').value=seed;
+	$('sizeInput').value=N; $('seedInput').value=seed; $('difficultyInput').value=difficulty;
 	$('boardLabel').textContent=`${N} \u00d7 ${N}`;
 	$('verifiedLabel').textContent='CHECKING THE FULL GRID';
 	setOverlay('loading'); setStatus('Filling every dot and verifying a complete solution...'); updateUI();
@@ -597,7 +664,7 @@ function loadPuzzle(N, seed) {
 		try { game=compileLevel(level,0); } catch(error) { fail(error); return; }
 		game.ms=Math.round(performance.now()-started);
 		busy=false; effects=[]; hoverId=-1; hintId=-1;
-		if(restoredView && restoredView.N===N && restoredView.seed===seed) {
+		if(restoredView && restoredView.N===N && restoredView.seed===seed && (restoredView.difficulty??7)===difficulty) {
 			view={zoom:clamp(Number(restoredView.zoom)||1,.6,48),cx:Number(restoredView.cx),cy:Number(restoredView.cy)};
 			if(!Number.isFinite(view.cx) || !Number.isFinite(view.cy)) view={zoom:1,cx:(N-1)/2,cy:(N-1)/2};
 			constrainView();
@@ -607,7 +674,7 @@ function loadPuzzle(N, seed) {
 		$('verifiedLabel').title='Every dot belongs to exactly one path. Every step of a complete solution was independently checked.';
 		setOverlay('none'); updateUI();
 		setStatus(`Built in ${number(game.ms)} ms. ${number(N*N)} / ${number(N*N)} dots used. Drag to pan; scroll or pinch to zoom.`);
-		try { history.replaceState(null,'',`#n=${N}&seed=${seed}`); } catch (_) { /* file:// history is optional */ }
+		try { history.replaceState(null,'',`#n=${N}&seed=${seed}&difficulty=${difficulty}`); } catch (_) { /* file:// history is optional */ }
 		savePersisted();
 		requestDraw(true);
 	}
@@ -617,13 +684,13 @@ function loadPuzzle(N, seed) {
 		fallbackUsed=true; cleanupWorker();
 		setTimeout(()=>{
 			if(thisJob!==job) return;
-			try { const level=engine.generate(N,seed); engine.validate(level); finish(level); }
+			try { const level=engine.generate(N,seed,difficulty); engine.validate(level); finish(level); }
 			catch(error) { fail(error); }
 		},20);
 	}
 	try {
 		const source='"use strict";\n'+createEngine.toString()+
-			'\nself.onmessage=function(e){try{const engine=createEngine();const l=engine.generate(e.data.N,e.data.seed);engine.validate(l);self.postMessage({level:l});}catch(error){self.postMessage({error:String(error.message||error)});}};';
+			'\nself.onmessage=function(e){try{const engine=createEngine();const l=engine.generate(e.data.N,e.data.seed,e.data.difficulty);engine.validate(l);self.postMessage({level:l});}catch(error){self.postMessage({error:String(error.message||error)});}};';
 		workerUrl=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
 		worker=new Worker(workerUrl);
 		worker.onmessage=e=>{
@@ -632,31 +699,37 @@ function loadPuzzle(N, seed) {
 		};
 		worker.onerror=e=>{ e.preventDefault(); fallback(); };
 		workerTimer=setTimeout(()=>fail('Generation took longer than expected.'),15000);
-		worker.postMessage({N,seed});
+		worker.postMessage({N,seed,difficulty});
 	} catch(_) { fallback(); }
 }
 function readSettings() {
-	const N=Number($('sizeInput').value), seed=Number($('seedInput').value), speed=Number($('speedInput').value);
+	const N=Number($('sizeInput').value), seed=Number($('seedInput').value), difficulty=Number($('difficultyInput').value), speed=Number($('speedInput').value);
 	if(!$('sizeInput').value.trim() || !Number.isInteger(N) || N<8 || N>200) {
 		setStatus('Choose a whole-number grid size from 8 to 200.',true); $('sizeInput').focus(); return null;
 	}
 	if(!$('seedInput').value.trim() || !Number.isInteger(seed) || seed<0 || seed>4294967295) {
 		setStatus('Choose a whole-number seed from 0 to 4294967295.',true); $('seedInput').focus(); return null;
 	}
+	if(!$('difficultyInput').value.trim() || !Number.isInteger(difficulty) || difficulty<1 || difficulty>10) {
+		setStatus('Choose a difficulty from 1 to 10.',true); $('difficultyInput').focus(); return null;
+	}
 	if(!$('speedInput').value.trim() || !Number.isFinite(speed) || speed<5 || speed>200) {
 		setStatus('Choose an arrow speed from 5 to 200 dots per second.',true); $('speedInput').focus(); return null;
 	}
-	return {N,seed,speed};
+	return {N,seed,difficulty,speed};
 }
 function newPuzzle() {
-	const N=Number($('sizeInput').value);
+	const N=Number($('sizeInput').value), difficulty=Number($('difficultyInput').value);
 	if(!$('sizeInput').value.trim() || !Number.isInteger(N) || N<8 || N>200) {
 		setStatus('Choose a whole-number grid size from 8 to 200.',true); $('sizeInput').focus(); return;
+	}
+	if(!$('difficultyInput').value.trim() || !Number.isInteger(difficulty) || difficulty<1 || difficulty>10) {
+		setStatus('Choose a difficulty from 1 to 10.',true); $('difficultyInput').focus(); return;
 	}
 	let seed;
 	if(globalThis.crypto && crypto.getRandomValues) seed=crypto.getRandomValues(new Uint32Array(1))[0];
 	else seed=Math.floor(Math.random()*4294967296);
-	loadPuzzle(N,seed);
+	loadPuzzle(N,seed,difficulty);
 }
 
 // Runtime legality is a single straight ray. No per-dot snake simulation or grid rebuilding.
@@ -734,7 +807,7 @@ function replay() {
 		game.counts[a.id]=game.dependencies[a.id].length;
 		if(game.counts[a.id]===0) game.available.add(a.id);
 	}
-	$('sizeInput').value=game.N; $('seedInput').value=game.seed;
+	$('sizeInput').value=game.N; $('seedInput').value=game.seed; $('difficultyInput').value=game.difficulty;
 	setOverlay('none'); fitView(); setStatus('Same grid, fresh start. Every legal move helps.'); updateUI(); requestDraw(true);
 }
 function bestAvailable(exclude=-1) {
@@ -1019,7 +1092,8 @@ canvas.addEventListener('pointerleave',()=>{if(!gesture){hoverId=-1;requestDraw(
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('wheel',e=>{if(!game||busy)return;e.preventDefault();const p=eventPoint(e);zoomAt(Math.exp(-clamp(e.deltaY,-100,100)*.005),p.x,p.y);},{passive:false});
 window.addEventListener('blur',cancelPointers);
-$('settingsForm').addEventListener('submit',e=>{e.preventDefault();const s=readSettings();if(s)loadPuzzle(s.N,s.seed);});
+$('settingsForm').addEventListener('submit',e=>{e.preventDefault();const s=readSettings();if(s)loadPuzzle(s.N,s.seed,s.difficulty);});
+$('difficultyInput').addEventListener('change',()=>{const v=clamp(Math.round(Number($('difficultyInput').value)||7),1,10);$('difficultyInput').value=String(v);savePersisted();setStatus(`Difficulty ${v}/10. Press Load or New puzzle to generate with it.`);});
 $('speedInput').addEventListener('change',()=>{const v=clamp(Number($('speedInput').value)||60,5,200);$('speedInput').value=String(Math.round(v));savePersisted();setStatus(`Arrow speed: ${$('speedInput').value} dots per second.`);});
 $('newBtn').addEventListener('click',newPuzzle);
 $('hintBtn').addEventListener('click',hint);
@@ -1047,37 +1121,40 @@ document.addEventListener('keydown',e=>{
 new ResizeObserver(resize).observe($('stage'));
 window.addEventListener('resize',resize);
 window.addEventListener('pagehide',()=>{savePersisted();cleanupWorker();stopDemo();});
-window.addEventListener('pageshow',e=>{if(e.persisted && busy){const s=readSettings();if(s)loadPuzzle(s.N,s.seed);}});
+window.addEventListener('pageshow',e=>{if(e.persisted && busy){const s=readSettings();if(s)loadPuzzle(s.N,s.seed,s.difficulty);}});
 // Read-only diagnostics, also useful when maintaining this standalone file.
 window.ArrowsDebug=Object.freeze({
 	version:'1.0',
-	snapshot:()=>game?{N:game.N,seed:game.seed,remaining:game.remaining,strikes:game.strikes,arrows:game.arrows.length,
+	snapshot:()=>game?{N:game.N,seed:game.seed,difficulty:game.difficulty,remaining:game.remaining,strikes:game.strikes,arrows:game.arrows.length,
 		available:[...game.available],covered:game.owner.reduce((n,id)=>n+(id>=0),0),busy,
 		ms:game.ms,history:game.history.length,animations:effects.length,zoom:view.zoom}:null,
-	validate:()=>game?engine.validate({N:game.N,seed:game.seed,ms:game.ms,arrows:game.arrows.map(a=>({cells:a.cells})),solution:game.solution}):null
+	validate:()=>game?engine.validate({N:game.N,seed:game.seed,difficulty:game.difficulty,ms:game.ms,arrows:game.arrows.map(a=>({cells:a.cells})),solution:game.solution}):null
 });
 resize();updateUI();
-let initialN=30,initialSeed=42;
+let initialN=30,initialSeed=42,initialDifficulty=7;
 const saved=readPersisted();
 if(saved) {
 	if(Number.isInteger(saved.N)&&saved.N>=8&&saved.N<=200) initialN=saved.N;
 	if(Number.isInteger(saved.seed)&&saved.seed>=0&&saved.seed<=4294967295) initialSeed=saved.seed;
+	if(Number.isInteger(saved.difficulty)&&saved.difficulty>=1&&saved.difficulty<=10) initialDifficulty=saved.difficulty;
 	if(Number.isFinite(saved.speed)) {
 	if(saved.speed>=5&&saved.speed<=200) $('speedInput').value=String(Math.round(saved.speed));
 	else if(saved.speed>=.2&&saved.speed<=10) $('speedInput').value=String(Math.round(clamp(30/saved.speed,5,200)));
 }
-	if(saved.view) restoredView={N:initialN,seed:initialSeed,...saved.view};
+	if(saved.view) restoredView={N:initialN,seed:initialSeed,difficulty:initialDifficulty,...saved.view};
 }
 try {
-	const hash=new URLSearchParams(location.hash.slice(1)),n=Number(hash.get('n')),s=Number(hash.get('seed'));
+	const hash=new URLSearchParams(location.hash.slice(1)),n=Number(hash.get('n')),s=Number(hash.get('seed')),d=Number(hash.get('difficulty'));
 	const explicitN=hash.has('n')&&Number.isInteger(n)&&n>=8&&n<=200;
 	const explicitSeed=hash.has('seed')&&Number.isInteger(s)&&s>=0&&s<=4294967295;
+	const explicitDifficulty=hash.has('difficulty')&&Number.isInteger(d)&&d>=1&&d<=10;
 	if(explicitN) initialN=n;
 	if(explicitSeed) initialSeed=s;
-	if(explicitN || explicitSeed) restoredView=null;
+	if(explicitDifficulty) initialDifficulty=d;
+	if(explicitN || explicitSeed || explicitDifficulty) restoredView=null;
 } catch(_) {}
-$('sizeInput').value=String(initialN); $('seedInput').value=String(initialSeed);
-loadPuzzle(initialN,initialSeed);
+$('sizeInput').value=String(initialN); $('seedInput').value=String(initialSeed); $('difficultyInput').value=String(initialDifficulty);
+loadPuzzle(initialN,initialSeed,initialDifficulty);
 
 </script>
 </body>
