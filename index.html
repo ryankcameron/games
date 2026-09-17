@@ -33,6 +33,8 @@
 		input { background:transparent; border:0; color:var(--ink); font-size:13px; font-weight:600; padding:4px 0; min-width:0; }
 		#sizeInput { width:44px; }
 		#seedInput { width:88px; }
+		#speedInput { width:42px; }
+		.unit { margin-left:-4px; color:var(--muted); font-size:11px; }
 		input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
 		input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 		.infobar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -132,6 +134,7 @@
 			<form id="settingsForm" class="settings">
 				<label class="field">Grid <input id="sizeInput" aria-label="Grid size, 8 to 200" type="number" min="8" max="200" step="1" value="70" required></label>
 				<label class="field">Seed <input id="seedInput" aria-label="Puzzle seed" type="number" min="0" max="4294967295" step="1" value="42" required></label>
+				<label class="field">Speed <input id="speedInput" aria-label="Arrow exit animation duration in seconds" type="number" min="0.2" max="10" step="0.1" value="2.5" required><span class="unit">s</span></label>
 				<button id="loadBtn" type="submit" title="Generate the selected grid and seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Load</span><span class="sr-only"> selected seed</span></button>
 			</form>
 			<button id="newBtn" class="primary" type="button" title="New puzzle with a different seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New<span class="new-label"> puzzle</span></span></button>
@@ -607,14 +610,17 @@ function loadPuzzle(N, seed) {
 	} catch(_) { fallback(); }
 }
 function readSettings() {
-	const N=Number($('sizeInput').value), seed=Number($('seedInput').value);
+	const N=Number($('sizeInput').value), seed=Number($('seedInput').value), speed=Number($('speedInput').value);
 	if(!$('sizeInput').value.trim() || !Number.isInteger(N) || N<8 || N>200) {
 		setStatus('Choose a whole-number grid size from 8 to 200.',true); $('sizeInput').focus(); return null;
 	}
 	if(!$('seedInput').value.trim() || !Number.isInteger(seed) || seed<0 || seed>4294967295) {
 		setStatus('Choose a whole-number seed from 0 to 4294967295.',true); $('seedInput').focus(); return null;
 	}
-	return {N,seed};
+	if(!$('speedInput').value.trim() || !Number.isFinite(speed) || speed<.2 || speed>10) {
+		setStatus('Choose an arrow animation speed from 0.2 to 10 seconds.',true); $('speedInput').focus(); return null;
+	}
+	return {N,seed,speed};
 }
 function newPuzzle() {
 	const N=Number($('sizeInput').value);
@@ -668,7 +674,8 @@ function makeMove(id, automatic=false) {
 		const hx=ox+a.hx*cell,hy=oy+a.hy*cell;
 		const rayToScreen=a.dx===1?(width-hx)/cell:a.dx===-1?hx/cell:a.dy===1?(height-hy)/cell:hy/cell;
 		const total=a.length+Math.max(1,rayToScreen)+2;
-		effects.push({type:'exit',id,start,total,duration:reduceMotion?80:clamp(300+total*3,360,850)});
+		const exitSeconds=clamp(Number($('speedInput').value)||2.5,.2,10);
+		effects.push({type:'exit',id,start,total,duration:reduceMotion?120:exitSeconds*1000});
 		if(!game.remaining) { stopDemo(); setStatus('The last arrow is on its way out.'); }
 		else if(automatic) setStatus('Auto-solving. Press Stop or click an arrow to take over.');
 		else setStatus(`${number(game.arrows.length-game.remaining)} cleared. ${number(game.remaining)} to go.`);
@@ -823,7 +830,8 @@ function draw(now) {
 	for(const effect of effects) {
 		const p=clamp((now-effect.start)/effect.duration,0,1),a=game.arrows[effect.id];
 		if(effect.type==='exit') {
-			paintArrow(ctx,a,effect.total*p*p,'#242729',t,false,reduceMotion?1-p:1);
+			const fade=reduceMotion?1-p:1-clamp((p-.12)/.88,0,1)**1.35;
+			paintArrow(ctx,a,effect.total*p*p,'#242729',t,false,fade);
 		} else {
 			let k;
 			if(p<.44) k=1-Math.pow(1-p/.44,3);
@@ -952,6 +960,7 @@ canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('wheel',e=>{if(!game||busy)return;e.preventDefault();const p=eventPoint(e);zoomAt(Math.exp(-clamp(e.deltaY,-100,100)*.005),p.x,p.y);},{passive:false});
 window.addEventListener('blur',cancelPointers);
 $('settingsForm').addEventListener('submit',e=>{e.preventDefault();const s=readSettings();if(s)loadPuzzle(s.N,s.seed);});
+$('speedInput').addEventListener('change',()=>{const v=clamp(Number($('speedInput').value)||2.5,.2,10);$('speedInput').value=String(Math.round(v*10)/10);setStatus(`Arrow exit animation: ${$('speedInput').value} seconds.`);});
 $('newBtn').addEventListener('click',newPuzzle);
 $('hintBtn').addEventListener('click',hint);
 $('undoBtn').addEventListener('click',undo);
