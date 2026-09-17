@@ -1,2690 +1,1001 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Arrows — worker pool generator (Blob worker)</title>
-  <style>
-    :root { color-scheme: light; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#fff; }
-    header{
-      position: sticky; top:0; z-index:10;
-      display:flex; gap:12px; align-items:center; flex-wrap:wrap;
-      padding:10px 12px; border-bottom:1px solid #e6e6e6; background:#fff;
-    }
-    header .spacer{flex:1;}
-    button,input{font:inherit;}
-    button{padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:#fafafa;cursor:pointer;}
-    button:hover{background:#f1f1f1;}
-    .pill{padding:6px 10px;border:1px solid #eee;border-radius:999px;background:#fbfbfb;}
-    #wrap{display:flex;justify-content:center;padding:10px 8px 16px;}
-    canvas{border:1px solid #eee;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.06);touch-action:none;}
-    .muted{color:#666;font-size:13px;}
-  </style>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+	<meta name="theme-color" content="#f5f5f2">
+	<title>Arrows | The full-grid puzzle</title>
+	<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23232628'/%3E%3Cpath d='M17 46V24h28m-9-9 9 9-9 9' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+	<style>
+		:root { color-scheme: light; --paper:#f5f5f2; --ink:#242729; --muted:#737773; --line:#e1e3dd; --soft:#eef0ea; --blue:#226bd1; --red:#bb3e3e; }
+		* { box-sizing:border-box; }
+		body { margin:0; color:var(--ink); background:var(--paper); font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+		button, input { font:inherit; }
+		button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:0 14px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink); cursor:pointer; font-size:13px; font-weight:560; white-space:nowrap; }
+		button:hover:not(:disabled) { background:var(--soft); border-color:#c9cdc3; }
+		button:active:not(:disabled) { transform:translateY(1px); }
+		button:disabled { opacity:.38; cursor:default; }
+		button.primary { background:var(--ink); color:#fff; border-color:var(--ink); }
+		button.primary:hover { background:#414648; }
+		button.quiet { background:transparent; border-color:transparent; }
+		button[aria-pressed="true"] { background:var(--ink); color:#fff; }
+		button:focus-visible, input:focus-visible, canvas:focus-visible, summary:focus-visible { outline:2px solid var(--blue); outline-offset:3px; }
+		svg { width:17px; height:17px; flex:none; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+		.app { max-width:1500px; height:100dvh; min-height:470px; margin:auto; padding:22px 28px 14px; display:flex; flex-direction:column; gap:15px; }
+		.masthead { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+		.identity { display:flex; gap:12px; align-items:center; }
+		.logo { display:grid; place-items:center; width:44px; height:44px; border-radius:12px; background:var(--ink); color:white; }
+		.logo svg { width:27px; height:27px; stroke-width:2; }
+		h1 { margin:0; font-size:22px; letter-spacing:.10em; font-weight:700; line-height:1.1; }
+		.tagline { margin:5px 0 0; color:var(--muted); font-size:11px; letter-spacing:.065em; }
+		.settings { display:flex; align-items:center; gap:8px; }
+		.field { display:flex; gap:8px; align-items:center; padding:0 11px; height:38px; border:1px solid var(--line); border-radius:9px; background:#fff; font-size:12px; color:var(--muted); }
+		input { background:transparent; border:0; color:var(--ink); font-size:13px; font-weight:600; padding:4px 0; min-width:0; }
+		#sizeInput { width:44px; }
+		#seedInput { width:88px; }
+		input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
+		input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+		.infobar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+		.instruction { margin:0; font-size:14px; color:#5b615c; }
+		.instruction strong { font-weight:600; color:var(--ink); }
+		.stats { display:flex; align-items:center; gap:22px; font-size:12px; color:var(--muted); white-space:nowrap; }
+		.stats strong { font-size:15px; color:var(--ink); font-weight:650; font-variant-numeric:tabular-nums; }
+		.divider { width:1px; height:22px; background:var(--line); }
+		.stage { position:relative; flex:1; min-height:220px; background:#fff; border:1px solid var(--line); border-radius:17px; overflow:hidden; box-shadow:0 4px 20px #24272904; }
+		canvas { position:absolute; inset:0; display:block; width:100%; height:100%; touch-action:none; outline:none; }
+		.corner { position:absolute; z-index:1; pointer-events:none; top:16px; padding:6px 9px; border-radius:6px; color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.08em; background:#fffffff0; }
+		#boardLabel { left:15px; }
+		#verifiedLabel { right:15px; }
+		.progress { position:absolute; left:0; right:0; bottom:0; height:3px; background:#f0f1ed; }
+		.progress span { display:block; width:0; height:100%; background:#454c44; transition:width .2s; }
+		.overlay { position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; background:#ffffffc7; backdrop-filter:blur(5px); }
+		.overlay[hidden], [hidden] { display:none !important; }
+		.card { width:min(380px, calc(100% - 40px)); padding:32px; text-align:center; border:1px solid var(--line); border-radius:18px; box-shadow:0 12px 40px #0000000a; background:white; }
+		.card h2 { margin:0 0 12px; font-size:25px; letter-spacing:-.03em; }
+		.card p { margin:0 0 22px; font-size:14px; line-height:1.6; color:var(--muted); }
+		.card .actions { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; }
+		.spinner { width:25px; height:25px; border:2px solid var(--line); border-top-color:var(--ink); border-radius:50%; margin:0 auto 20px; animation:spin .7s linear infinite; }
+		@keyframes spin { to { transform:rotate(360deg); } }
+		.toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+		.tools, .view-tools { display:flex; align-items:center; gap:7px; }
+		.tools kbd { font-family:inherit; font-size:10px; color:var(--muted); background:#f3f4f0; border-radius:3px; padding:2px 4px; font-weight:400; }
+		.view-tools button { padding:0; width:36px; }
+		.view-tools #fitBtn { width:auto; padding:0 13px; }
+		#zoomText { min-width:48px; text-align:center; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+		.footer { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:18px; color:var(--muted); font-size:11px; }
+		#status { margin:0; }
+		#status.error { color:var(--red); }
+		.help-wrap { position:relative; flex:none; }
+		details summary { cursor:pointer; list-style:none; color:#535a53; }
+		details summary::-webkit-details-marker { display:none; }
+		.help-content { position:absolute; bottom:29px; right:0; z-index:5; width:310px; padding:20px; border:1px solid var(--line); border-radius:12px; background:white; box-shadow:0 10px 35px #00000012; color:#596058; font-size:13px; line-height:1.6; }
+		.help-content h3 { margin:0 0 9px; color:var(--ink); font-size:15px; }
+		.help-content p { margin:8px 0; }
+		.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+		@media(max-width:860px) {
+			.app { padding:15px 14px 10px; gap:11px; }
+			.masthead { gap:12px; }
+			.tagline { display:none; }
+			.logo { width:36px; height:36px; border-radius:10px; }
+			h1 { font-size:19px; }
+			.identity { gap:9px; }
+			.settings { gap:5px; }
+			.field { padding:0 8px; gap:5px; }
+			#seedInput { width:74px; }
+			.stats { gap:12px; }
+			.instruction { font-size:12px; }
+		}
+		@media(max-width:620px) {
+			.app { padding:12px 10px 10px; gap:10px; }
+			.masthead { flex-wrap:wrap; }
+			.identity { order:0; }
+			.settings { flex-wrap:wrap; justify-content:flex-end; flex:1; }
+			#settingsForm { display:contents; }
+			.field { font-size:11px; height:35px; }
+			#seedInput { width:70px; }
+			#sizeInput { width:29px; }
+			#loadBtn { width:34px; padding:0; min-height:35px; }
+			#loadBtn span { display:none; }
+			#newBtn { min-height:35px; padding:0 10px; }
+			#newBtn .new-label { display:none; }
+			.infobar { flex-wrap:wrap; gap:8px; }
+			.instruction { width:100%; }
+			.stats { width:100%; justify-content:space-between; gap:6px; }
+			.stats strong { font-size:14px; }
+			.divider { display:none; }
+			.tools, .view-tools { gap:4px; }
+			.tools button { padding:0 9px; min-height:35px; }
+			.tools kbd, .tools .optional-label, #replayBtn .tool-label, #hintBtn svg, #undoBtn svg { display:none; }
+			.view-tools button { width:31px; min-height:35px; }
+			.view-tools #fitBtn { padding:0 8px; }
+			#zoomText { min-width:35px; font-size:10px; }
+			.stage { border-radius:12px; }
+			.corner { top:9px; font-size:9px; padding:4px 5px; }
+			#boardLabel { left:7px; } #verifiedLabel { right:7px; }
+			.footer { font-size:10px; align-items:flex-start; }
+			#status { max-width:77%; line-height:1.4; }
+		}
+		@media(max-width:359px) { .toolbar { flex-wrap:wrap; } .view-tools { margin-left:auto; } }
+		@media(prefers-reduced-motion:reduce) {
+			.progress span { transition:none; } .spinner { animation-duration:1.8s; }
+		}
+	</style>
 </head>
 <body>
-<header>
-  <button id="newBtn">New level</button>
-  <label class="pill">N <input id="nIn" type="number" min="20" max="200" value="70" style="width:70px;border:none;outline:none;background:transparent"/></label>
-  <label class="pill">Seed <input id="sIn" type="number" value="42" style="width:90px;border:none;outline:none;background:transparent"/></label>
-  <button id="zoomOutBtn">−</button>
-  <div class="pill">Zoom <b id="zoomTxt">100%</b></div>
-  <button id="zoomInBtn">+</button>
-  <button id="zoomResetBtn">Fit</button>
-  <div class="spacer"></div>
-
-  <div class="pill">Status: <b id="statusTxt">Idle</b></div>
-  <div class="pill">Strikes: <b id="strikeTxt">0</b>/<span id="strikeMaxTxt">9</span></div>
-  <div class="pill">Remaining: <b id="remainTxt">0</b></div>
-  <span class="muted">Generation runs in worker pool (Blob). Click any tail/head to move.</span>
-</header>
-
-<div id="wrap">
-  <canvas id="c" width="980" height="980"></canvas>
+<div class="app">
+	<header class="masthead">
+		<div class="identity">
+			<div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M6 26V10h20m-7-7 7 7-7 7"/></svg></div>
+			<div><h1>ARROWS</h1><p class="tagline">THE FULL-GRID PUZZLE</p></div>
+		</div>
+		<div class="settings">
+			<form id="settingsForm" class="settings">
+				<label class="field">Grid <input id="sizeInput" aria-label="Grid size, 8 to 200" type="number" min="8" max="200" step="1" value="70" required></label>
+				<label class="field">Seed <input id="seedInput" aria-label="Puzzle seed" type="number" min="0" max="4294967295" step="1" value="42" required></label>
+				<button id="loadBtn" type="submit" title="Generate the selected grid and seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Load</span><span class="sr-only"> selected seed</span></button>
+			</form>
+			<button id="newBtn" class="primary" type="button" title="New puzzle with a different seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New<span class="new-label"> puzzle</span></span></button>
+		</div>
+	</header>
+	<div class="infobar">
+		<p class="instruction"><strong>Follow the arrow.</strong> Clear its way to the edge.</p>
+		<div class="stats" aria-label="Puzzle statistics">
+			<span><strong id="remainingText">&ndash;</strong> <span id="remainingLabel">arrows left</span></span>
+			<span class="divider"></span>
+			<span><strong id="coverageText">&ndash;</strong> filled</span>
+			<span class="divider"></span>
+			<span><strong id="strikesText">0</strong> / 9 mistakes</span>
+		</div>
+	</div>
+	<main class="stage" id="stage">
+		<canvas id="board" tabindex="0" aria-label="Arrows puzzle. Tap any part of an arrow to send it out. Press H for a hint, Enter to play the hinted arrow, Z to undo, F to fit, and plus or minus to zoom."></canvas>
+		<span class="corner" id="boardLabel">70 &times; 70</span>
+		<span class="corner" id="verifiedLabel">FULL COVERAGE &middot; VERIFIED SOLUTION</span>
+		<div class="progress" role="progressbar" aria-label="Arrows cleared" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progressFill"></span></div>
+		<div class="overlay" id="overlay">
+			<div class="card">
+				<div class="spinner" id="spinner"></div>
+				<h2 id="overlayTitle">Making a puzzle.</h2>
+				<p id="overlayText">Filling every dot and checking the way out.</p>
+				<div class="actions" id="overlayActions" hidden>
+					<button class="primary" id="overlayNew">New puzzle</button>
+					<button id="overlayReplay">Replay</button>
+					<button id="overlayUndo" hidden>Undo mistake</button>
+				</div>
+			</div>
+		</div>
+	</main>
+	<nav class="toolbar" aria-label="Puzzle controls">
+		<div class="tools">
+			<button id="hintBtn" title="Highlight a safe arrow (H)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6m-5 3h4M8.5 14.5a6 6 0 1 1 7 0L15 16H9z"/></svg>Hint <kbd>H</kbd></button>
+			<button id="undoBtn" title="Undo the last move or mistake (Z)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3"/></svg>Undo <kbd>Z</kbd></button>
+			<button id="replayBtn" title="Restart this same puzzle (R)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg><span class="tool-label">Replay</span></button>
+			<button id="demoBtn" class="quiet" aria-pressed="false" title="Watch a verified solution; press again to stop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg><span class="optional-label">Auto-solve</span></button>
+		</div>
+		<div class="view-tools" aria-label="Board zoom">
+			<button id="zoomOutBtn" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+			<span id="zoomText">100%</span>
+			<button id="zoomInBtn" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
+			<button id="fitBtn" title="Fit the whole board (F)">Fit</button>
+		</div>
+	</nav>
+	<footer class="footer">
+		<p id="status" role="status" aria-live="polite">Preparing the full grid...</p>
+		<details class="help-wrap" id="help">
+			<summary>How to play &nbsp;?</summary>
+			<div class="help-content">
+				<h3>A clear path is the only way out.</h3>
+				<p>Tap any part of an arrow. Its head travels straight in the direction it points, and its body follows around the bends.</p>
+				<p>Check the <strong>entire line from the head to the edge</strong>. Another arrow anywhere on that line blocks the move. A blocked arrow comes back and costs one mistake.</p>
+				<p>Clear every arrow before making nine mistakes. There is no timer, and any legal move is safe to make.</p>
+				<p><strong>Move around:</strong> drag to pan, scroll or pinch to zoom, F to fit. H highlights a legal move; Enter plays it. Z undoes a move or mistake. R replays this puzzle.</p>
+				<p>Every puzzle uses every dot exactly once and has a checked solution. The same grid size and seed reproduce the same board. Works offline.</p>
+			</div>
+		</details>
+	</footer>
 </div>
-
 <script>
-/* ============================================================
-   Blob Worker bootstrap
-   - Works on file:// (no server)
-   - Paste your level_worker.js into the string below
-   ============================================================ */
-
-let view = {
-  zoom: 1.0,         // user zoom multiplier (1 = fit)
-  panX: 0,           // in world grid units (not pixels)
-  panY: 0,
-  isPanning: false,
-  panStart: null
-};
-const strikesAllowed = 9;
-const LEVEL_WORKER_SOURCE = `
-/* ============================================================
-   level_worker.js (Blob worker)
-   - Generates densely packed, always-solvable levels
-   - Segment length >= 2 edges (prevents stub/dir ambiguity)
-   - Two-phase fill: sweepers -> gap-target fill-until-stuck
-   ============================================================ */
-
-let jobId = 0;
-
-self.onmessage = (e) => {
-  const msg = e.data || {};
-  if (msg.type === "start") {
-    jobId = msg.jobId;
-    runSearch(msg);
-  } else if (msg.type === "stop") {
-    jobId = msg.jobId; // bump so loops bail
-  }
-};
-
-/* ---------- RNG ---------- */
-function mulberry32(seed){
-  let t = seed >>> 0;
-  return function(){
-    t += 0x6d2b79f5;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function rint(rng,a,b){ return a + Math.floor(rng()*(b-a+1)); }
-function choice(rng,arr){ return arr[(rng()*arr.length)|0]; }
-/* ---------- Helpers (worker) ------------------ */
-function neighbors4(N,x,y){
-  return [
-    {x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1}
-  ].filter(p => dotInBounds(N,p.x,p.y));
-}
-
-function pickStartInLargestComponent(rng, N, staticOcc){
-  const seen = new Uint8Array(N*N);
-
-  let bestSize = 0;
-  let bestStartable = null;       // array of {x,y} that can start
-  let bestAll = null;             // array of {x,y} all empty in the component
-
-  for (let y=0;y<N;y++){
-    for (let x=0;x<N;x++){
-      const id = dId(N,x,y);
-      if (seen[id]) continue;
-      if (staticOcc.occD[id]) { seen[id]=1; continue; }
-
-      // BFS this empty-dot component
-      let head = 0;
-      const qx = [x];
-      const qy = [y];
-      seen[id] = 1;
-
-      const compAll = [];
-      const compStartable = [];
-
-      while (head < qx.length){
-        const cx = qx[head];
-        const cy = qy[head];
-        head++;
-
-        compAll.push({x:cx,y:cy});
-        if (hasFreeNeighbor(N, staticOcc, cx, cy)) compStartable.push({x:cx,y:cy});
-
-        // neighbors4 inline (faster)
-        let nx, ny, nid;
-
-        nx = cx + 1; ny = cy;
-        if (nx < N){
-          nid = dId(N,nx,ny);
-          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
-        }
-
-        nx = cx - 1; ny = cy;
-        if (nx >= 0){
-          nid = dId(N,nx,ny);
-          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
-        }
-
-        nx = cx; ny = cy + 1;
-        if (ny < N){
-          nid = dId(N,nx,ny);
-          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
-        }
-
-        nx = cx; ny = cy - 1;
-        if (ny >= 0){
-          nid = dId(N,nx,ny);
-          if (!seen[nid] && !staticOcc.occD[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-          else if (!seen[nid] && staticOcc.occD[nid]){ seen[nid]=1; }
-        }
-      }
-
-      // component "size" is all empty dots, but we only keep it if we have any startable
-      if (compStartable.length && compAll.length > bestSize){
-        bestSize = compAll.length;
-        bestAll = compAll;
-        bestStartable = compStartable;
-      }
-    }
-  }
-
-  if (!bestStartable || !bestStartable.length) return null;
-
-  // Bias toward deep-interior points of the biggest void:
-  // pick among the top K by borderDist (farther from border => more "inside the lake")
-  const K = Math.min(32, bestStartable.length);
-
-  // compute borderDist for each, then partial-select top K by simple insertion
-  const top = [];
-  for (let i=0;i<bestStartable.length;i++){
-    const p = bestStartable[i];
-    const bd = borderDist(N, p.x, p.y);
-
-    // keep a small list of best K by bd
-    let inserted = false;
-    for (let j=0;j<top.length;j++){
-      if (bd > top[j].bd){
-        top.splice(j, 0, {x:p.x,y:p.y,bd});
-        inserted = true;
-        break;
-      }
-    }
-    if (!inserted) top.push({x:p.x,y:p.y,bd});
-    if (top.length > K) top.length = K;
-  }
-
-  // random among top K, with a mild skew to the best
-  // (square the RNG so it leans toward the start of the list)
-  const r = rng();
-  const idx = Math.floor((r*r) * top.length);
-  return {x: top[idx].x, y: top[idx].y};
-}
-
-function largestEmptyComponentStats(N, level){
-  // Build a dot-occupancy grid from level.arrows (dots occupied by any arrow)
-  const occD = new Uint8Array(N * N);
-  for (let i=0;i<level.arrows.length;i++){
-    const a = level.arrows[i];
-    const chain = a.chain;
-    for (let k=0;k<chain.length;k++){
-      const p = chain[k];
-      // chain dots are always in-bounds by construction
-      occD[dId(N, p.x, p.y)] = 1;
-    }
-  }
-
-  const seen = new Uint8Array(N * N);
-  let largest = 0;
-  let second = 0;
-  let third = 0;
-  let emptyCount = 0;
-
-  for (let y=0;y<N;y++){
-    for (let x=0;x<N;x++){
-      const id = dId(N,x,y);
-      if (occD[id]) continue;
-      emptyCount++;
-      if (seen[id]) continue;
-
-      // BFS on empty component
-      let head = 0;
-      const qx = [x];
-      const qy = [y];
-      seen[id] = 1;
-      let size = 0;
-
-      while (head < qx.length){
-        const cx = qx[head];
-        const cy = qy[head];
-        head++;
-        size++;
-
-        // 4-neighborhood
-        // inline bounds checks for speed
-        let nx, ny, nid;
-
-        nx = cx + 1; ny = cy;
-        if (nx < N){
-          nid = dId(N,nx,ny);
-          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-        }
-
-        nx = cx - 1; ny = cy;
-        if (nx >= 0){
-          nid = dId(N,nx,ny);
-          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-        }
-
-        nx = cx; ny = cy + 1;
-        if (ny < N){
-          nid = dId(N,nx,ny);
-          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-        }
-
-        nx = cx; ny = cy - 1;
-        if (ny >= 0){
-          nid = dId(N,nx,ny);
-          if (!occD[nid] && !seen[nid]){ seen[nid]=1; qx.push(nx); qy.push(ny); }
-        }
-      }
-
-      // track top 3 component sizes
-      if (size > largest){
-        third = second;
-        second = largest;
-        largest = size;
-      } else if (size > second){
-        third = second;
-        second = size;
-      } else if (size > third){
-        third = size;
-      }
-    }
-  }
-
-  return {
-    emptyCount,
-    largest,
-    second,
-    third
-  };
-}
-/* ---------- Mask stuff ------------ */
-function makeRectMask(x0, y0, w, h){
-  return (x,y) => (x >= x0 && x < x0+w && y >= y0 && y < y0+h);
-}
-
-function chainToVertices(chain){
-  const verts = [{ x: chain[0].x, y: chain[0].y }];
-  for (let i=2;i<chain.length;i++){
-    const a=chain[i-2], b=chain[i-1], c=chain[i];
-    const dx1=b.x-a.x, dy1=b.y-a.y;
-    const dx2=c.x-b.x, dy2=c.y-b.y;
-    if (dx1!==dx2 || dy1!==dy2) verts.push({x:b.x,y:b.y});
-  }
-  verts.push({ x: chain[chain.length-1].x, y: chain[chain.length-1].y });
-  return verts;
-}
-
-// Keep the longest tail->head prefix that stays inside mask.
-// Then rebuild as a proper arrow later.
-// Keep the longest contiguous sub-chain that lies fully inside the mask.
-// (Not just a prefix from the tail.)
-function clipArrowChainToMask(arrow, inMask){
-  const ch = arrow.chain;
-  let bestA = -1, bestB = -1;
-  let a = -1;
-
-  for (let i = 0; i < ch.length; i++){
-    const inside = inMask(ch[i].x, ch[i].y);
-    if (inside){
-      if (a < 0) a = i;           // start a run
-    } else {
-      if (a >= 0){
-        const b = i - 1;
-        if (b - a > bestB - bestA){ bestA = a; bestB = b; }
-        a = -1;
-      }
-    }
-  }
-  if (a >= 0){
-    const b = ch.length - 1;
-    if (b - a > bestB - bestA){ bestA = a; bestB = b; }
-  }
-
-  if (bestA < 0) return null;
-
-  const outLen = bestB - bestA + 1;
-  if (outLen < 3) return null; // need >= 2 edges
-
-  const out = [];
-  for (let i = bestA; i <= bestB; i++){
-    out.push({ x: ch[i].x, y: ch[i].y });
-  }
-  return out;
-}
-
-
-function cropAndRebuildArrows(Nbig, arrowsBig, x0, y0, N){
-  const inMaskBig = makeRectMask(x0, y0, N, N);
-  const kept = [];
-
-  for (const a of arrowsBig){
-    const clippedChainBig = clipArrowChainToMask(a, inMaskBig);
-    if (!clippedChainBig) continue;
-
-    // remap to local cropped coordinates
-    const chainLocal = clippedChainBig.map(p => ({x:p.x - x0, y:p.y - y0}));
-
-    // compress to vertices then rebuild canonical arrow data
-    const vertsLocal = chainToVertices(chainLocal);
-    const rebuilt = buildArrowFromVertices(N, vertsLocal);
-    if (!rebuilt) continue;
-
-    // enforce your minimum (avoid stubs)
-    if (rebuilt.chain.length < 5) continue;
-    if (violatesSelfAim(N, rebuilt)) continue;
-
-    kept.push(rebuilt);
-  }
-
-  return kept;
-}
-function buildOccDFromArrowsBig(N, arrows){
-  const occD = new Uint8Array(N*N);
-  for (let i=0;i<arrows.length;i++){
-    const ch = arrows[i].chain;
-    for (let k=0;k<ch.length;k++){
-      const p = ch[k];
-      if (p.x>=0 && p.x<N && p.y>=0 && p.y<N) occD[dId(N,p.x,p.y)] = 1;
-    }
-  }
-  return occD;
-}
-
-// summed-area table (integral image) for fast window sums
-function buildIntegral(N, occD){
-  // int[y*(N+1)+x] for x,y in 0..N
-  const W = N + 1;
-  const I = new Int32Array(W * W);
-  for (let y=1;y<=N;y++){
-    let rowSum = 0;
-    for (let x=1;x<=N;x++){
-      rowSum += occD[(y-1)*N + (x-1)];
-      I[y*W + x] = I[(y-1)*W + x] + rowSum;
-    }
-  }
-  return I;
-}
-
-function rectSum(I, N, x0,y0,w,h){
-  const W = N+1;
-  const x1 = x0 + w, y1 = y0 + h;
-  return I[y1*W + x1] - I[y0*W + x1] - I[y1*W + x0] + I[y0*W + x0];
-}
-
-function findBestCropWindow(Nbig, arrowsBig, Nwin){
-  const occD = buildOccDFromArrowsBig(Nbig, arrowsBig);
-  const I = buildIntegral(Nbig, occD);
-
-  const com = arrowsCenterOfMass(arrowsBig);
-  const cx = com.x, cy = com.y;
-
-  let best = { x0: (Nbig-Nwin)>>1, y0: (Nbig-Nwin)>>1, s: -1 };
-
-  const maxX = Nbig - Nwin;
-  const maxY = Nbig - Nwin;
-
-  const lambda = 0.015; // tune 0.005..0.03
-
-  for (let y0=0; y0<=maxY; y0++){
-    for (let x0=0; x0<=maxX; x0++){
-      const s = rectSum(I, Nbig, x0,y0, Nwin,Nwin);
-
-      // distance from window center to COM
-      const wx = x0 + Nwin*0.5;
-      const wy = y0 + Nwin*0.5;
-      const dx = wx - cx, dy = wy - cy;
-      const penal = lambda * (dx*dx + dy*dy);
-
-      const score = s - penal;
-      if (score > best.s){
-        best = { x0, y0, s: score };
-      }
-    }
-  }
-  return best;
-}
-
-function arrowsCenterOfMass(arrows){
-  let sx=0, sy=0, n=0;
-  for (const a of arrows){
-    for (const p of a.chain){ sx += p.x; sy += p.y; n++; }
-  }
-  if (!n) return {x:0,y:0};
-  return { x: sx/n, y: sy/n };
-}
-function keepLargestOccupiedComponent(N, arrows){
-  if (!arrows.length) return arrows;
-
-  // Build dot occupancy and which arrows touch each dot
-  const occ = new Uint8Array(N*N);
-  const dotToArrows = Array.from({length:N*N}, () => null);
-
-  for (let ai=0; ai<arrows.length; ai++){
-    const ch = arrows[ai].chain;
-    for (let k=0; k<ch.length; k++){
-      const id = dId(N, ch[k].x, ch[k].y);
-      occ[id] = 1;
-      (dotToArrows[id] ??= []).push(ai);
-    }
-  }
-
-  const seen = new Uint8Array(N*N);
-  const q = new Int32Array(N*N);
-
-  let bestDots = null;
-  let bestSize = 0;
-
-  for (let i=0;i<occ.length;i++){
-    if (!occ[i] || seen[i]) continue;
-
-    // BFS occupied component
-    let head=0, tail=0;
-    q[tail++] = i;
-    seen[i] = 1;
-
-    const compDots = [];
-    while (head < tail){
-      const id = q[head++];
-      compDots.push(id);
-
-      const x = id % N;
-      const y = (id / N) | 0;
-
-      // 4-neighborhood
-      if (x+1 < N){
-        const n = id + 1;
-        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
-      }
-      if (x-1 >= 0){
-        const n = id - 1;
-        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
-      }
-      if (y+1 < N){
-        const n = id + N;
-        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
-      }
-      if (y-1 >= 0){
-        const n = id - N;
-        if (occ[n] && !seen[n]){ seen[n]=1; q[tail++]=n; }
-      }
-    }
-
-    if (compDots.length > bestSize){
-      bestSize = compDots.length;
-      bestDots = compDots;
-    }
-  }
-
-  if (!bestDots || bestSize === 0) return [];
-
-  // Keep arrows that touch any dot in the largest component
-  const keep = new Uint8Array(arrows.length);
-  for (let i=0;i<bestDots.length;i++){
-    const lst = dotToArrows[bestDots[i]];
-    if (!lst) continue;
-    for (let j=0;j<lst.length;j++) keep[lst[j]] = 1;
-  }
-
-  const out = [];
-  for (let i=0;i<arrows.length;i++){
-    if (keep[i]) out.push(arrows[i]);
-  }
-  return out;
-}
-
-function initBBoxFromArrow(arrow){
-  let minX=1e9, minY=1e9, maxX=-1e9, maxY=-1e9;
-  for (const p of arrow.chain){
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return { minX, minY, maxX, maxY };
-}
-
-function expandBBoxWithArrow(bb, arrow){
-  for (const p of arrow.chain){
-    if (p.x < bb.minX) bb.minX = p.x;
-    if (p.y < bb.minY) bb.minY = p.y;
-    if (p.x > bb.maxX) bb.maxX = p.x;
-    if (p.y > bb.maxY) bb.maxY = p.y;
-  }
-}
-
-function pickFrontierByBlobRim(rng, N, frontier, bb, mode){
-  if (!frontier || !frontier.length) return null;
-
-  const cx = (bb.minX + bb.maxX) * 0.5;
-  const cy = (bb.minY + bb.maxY) * 0.5;
-
-  // Helper: how "multi-sided" the blob contact is (encourages wrapping vs spokes)
-  function sideContactScore(p){
-    let sides = 0;
-    const x=p.x, y=p.y;
-    // NOTE: frontier points are empty dots. We infer blob contact from p.adj,
-    // but we also want diversity of contact directions. We approximate it using p.sc and p.adj.
-    // If you want exact directionality, we can compute it from staticOcc inside buildFrontier.
-    // For now: reward adj>=2 a lot.
-    if ((p.adj|0) >= 2) sides += 2;
-    if ((p.adj|0) >= 3) sides += 2;
-    return sides;
-  }
-
-  const SAMP = Math.min(frontier.length, 260);
-  let best = null;
-  let bestScore = -Infinity;
-
-  for (let i=0;i<SAMP;i++){
-    const p = frontier[(rng()*frontier.length)|0];
-
-    const adj = p.adj ?? 0;      // 1..4, blob-touch count (no borders)
-    if (adj < 2 && frontier.length > 120) continue;      // <<< BIG: prevents “single-touch launch rays”
-
-    const sc = p.sc ?? 0;        // 0..4 (includes border-as-occupied)
-    const bd = borderDist(N, p.x, p.y);
-
-    const dx = p.x - cx, dy = p.y - cy;
-    const d2 = dx*dx + dy*dy;
-
-    // Expand = slightly prefer farther rim points but still with high adjacency
-    // Fill   = prefer near-center pockets, high adjacency
-    const rimness = adj * 35 + sc * 6 + sideContactScore(p) * 12;
-
-    let score;
-    if (mode === "expand"){
-      score = (d2 * 0.25) + rimness + bd * 1.5 + rng()*2.0;
-    } else {
-      score = (-d2 * 0.35) + rimness + bd * 2.0 + rng()*2.0;
-    }
-
-    if (score > bestScore){
-      bestScore = score;
-      best = p;
-    }
-  }
-
-  return best ? {x:best.x, y:best.y} : null;
-}
-
-
-/* ---------- Grid helpers ---------- */
-function hId(N,x,y){ return y*(N-1)+x; }
-function vId(N,x,y){ return y*N+x; }
-function dId(N,x,y){ return y*N+x; }
-function hInBounds(N,x,y){ return x>=0 && y>=0 && x < N-1 && y < N; }
-function vInBounds(N,x,y){ return x>=0 && y>=0 && x < N   && y < N-1; }
-function dotInBounds(N,x,y){ return x>=0 && y>=0 && x < N && y < N; }
-
-const DIRS=[
-  {k:"U",dx:0,dy:-1},
-  {k:"D",dx:0,dy: 1},
-  {k:"L",dx:-1,dy:0},
-  {k:"R",dx: 1,dy:0},
-];
-function dirByKey(k){
-  for (let i=0;i<DIRS.length;i++) if (DIRS[i].k===k) return DIRS[i];
-  return DIRS[3];
-}
-
-function edgeBetweenDots(N, ax,ay, bx,by){
-  if (ax===bx){
-    const x=ax, y=Math.min(ay,by);
-    if (!vInBounds(N,x,y)) return {t:null,id:null};
-    return {t:"V", id:vId(N,x,y)};
-  } else if (ay===by){
-    const y=ay, x=Math.min(ax,bx);
-    if (!hInBounds(N,x,y)) return {t:null,id:null};
-    return {t:"H", id:hId(N,x,y)};
-  }
-  return {t:null,id:null};
-}
-function allOut(N, chain){
-  for (let i=0;i<chain.length;i++){
-    const p=chain[i];
-    if (dotInBounds(N,p.x,p.y)) return false;
-  }
-  return true;
-}
-function borderDist(N,x,y){
-  const a = x, b = y, c = (N-1)-x, d = (N-1)-y;
-  return Math.min(a,b,c,d);
-}
-/* ---------- Occupancy ---------- */
-function makeOcc(N){
-  return {
-    occH: new Uint8Array((N-1)*N),
-    occV: new Uint8Array(N*(N-1)),
-    occD: new Uint8Array(N*N),
-  };
-}
-function occupyStatic(occ, arrow, val){
-  const EH = arrow.staticEdgesH || [];
-  const EV = arrow.staticEdgesV || [];
-  const ED = arrow.staticDots   || [];
-  for (let i=0;i<EH.length;i++) occ.occH[EH[i]] = val;
-  for (let i=0;i<EV.length;i++) occ.occV[EV[i]] = val;
-  for (let i=0;i<ED.length;i++) occ.occD[ED[i]] = val;
-}
-function neighborOccScore(N, staticOcc, x, y){
-  let s = 0;
-  // treat out-of-bounds as occupied (pushes you away from borders if desired)
-  if (x<=0 || staticOcc.occD[dId(N,x-1,y)]) s++;
-  if (x>=N-1 || staticOcc.occD[dId(N,x+1,y)]) s++;
-  if (y<=0 || staticOcc.occD[dId(N,x,y-1)]) s++;
-  if (y>=N-1 || staticOcc.occD[dId(N,x,y+1)]) s++;
-  return s; // 0..4
-}
-
-/* ---------- Build arrow from vertices ---------- */
-function buildArrowFromVertices(N, vertices){
-  if (!vertices || vertices.length < 2) return null;
-
-  const chain=[];
-  const dots=[];
-  const edgesH=[];
-  const edgesV=[];
-
-  function pushDot(x,y){
-    chain.push({x:x,y:y});
-    dots.push(dId(N,x,y));
-  }
-
-  pushDot(vertices[0].x, vertices[0].y);
-
-  for (let i=0;i<vertices.length-1;i++){
-    const a=vertices[i], b=vertices[i+1];
-    if (a.x===b.x && a.y===b.y) continue;
-
-    if (a.x===b.x){
-      const x=a.x;
-      const step=b.y>a.y?1:-1;
-      for (let y=a.y; y!==b.y; y+=step){
-        const yEdge=Math.min(y,y+step);
-        if (!vInBounds(N,x,yEdge)) return null;
-        edgesV.push(vId(N,x,yEdge));
-        pushDot(x,y+step);
-      }
-    } else if (a.y===b.y){
-      const y=a.y;
-      const step=b.x>a.x?1:-1;
-      for (let x=a.x; x!==b.x; x+=step){
-        const xEdge=Math.min(x,x+step);
-        if (!hInBounds(N,xEdge,y)) return null;
-        edgesH.push(hId(N,xEdge,y));
-        pushDot(x+step,y);
-      }
-    } else {
-      return null;
-    }
-  }
-
-  if (chain.length < 2) return null;
-
-  // Determine head direction from last *actual* step (ignore duplicates)
-  let i = chain.length - 1;
-  while (i>0 && chain[i].x===chain[i-1].x && chain[i].y===chain[i-1].y) i--;
-  if (i<=0) return null;
-
-  const p0=chain[i-1], p1=chain[i];
-  const dx = Math.sign(p1.x-p0.x);
-  const dy = Math.sign(p1.y-p0.y);
-  const dirKey = dx===1?"R":dx===-1?"L":dy===1?"D":"U";
-
-  return {
-    vertices: vertices,
-    chain: chain,
-    staticDots: dots,
-    staticEdgesH: edgesH,
-    staticEdgesV: edgesV,
-    dir: dirKey
-  };
-}
-
-/* ---------- No self-aim: ray ahead must not hit own dots ---------- */
-function violatesSelfAim(N, arrow){
-  const dir = dirByKey(arrow.dir);
-  const head = arrow.chain[arrow.chain.length-1];
-
-  const selfD = new Uint8Array(N*N);
-  const sd = arrow.staticDots;
-  for (let i=0;i<sd.length;i++) selfD[sd[i]] = 1;
-
-  let x=head.x, y=head.y;
-  while (true){
-    x += dir.dx; y += dir.dy;
-    if (!dotInBounds(N,x,y)) return false;
-    if (selfD[dId(N,x,y)]) return true;
-  }
-}
-
-/* ---------- Snake simulation (same rules as main thread) ---------- */
-function simulateSnakeExit(N, staticOcc, arrow, maxSteps){
-  const dir=dirByKey(arrow.dir);
-  const chain = new Array(arrow.chain.length);
-  for (let i=0;i<arrow.chain.length;i++) chain[i] = {x:arrow.chain[i].x, y:arrow.chain[i].y};
-
-  const stepsLimit = maxSteps || (N + chain.length + 50);
-
-  const selfD = new Uint8Array(N*N);
-  const selfH = new Uint8Array((N-1)*N);
-  const selfV = new Uint8Array(N*(N-1));
-
-  for (let i=0;i<chain.length;i++){
-    const p=chain[i];
-    if (dotInBounds(N,p.x,p.y)) selfD[dId(N,p.x,p.y)]=1;
-    if (i>0){
-      const q=chain[i-1];
-      const e=edgeBetweenDots(N,q.x,q.y,p.x,p.y);
-      if (e.t==="H") selfH[e.id]=1;
-      if (e.t==="V") selfV[e.id]=1;
-    }
-  }
-
-  for (let step=0; step<stepsLimit; step++){
-    if (allOut(N, chain)) return {ok:true, steps:step, collision:null};
-
-    const t0=chain[0], t1=chain[1];
-    if (dotInBounds(N,t0.x,t0.y)) selfD[dId(N,t0.x,t0.y)]=0;
-    const te=edgeBetweenDots(N,t0.x,t0.y,t1.x,t1.y);
-    if (te.t==="H") selfH[te.id]=0;
-    if (te.t==="V") selfV[te.id]=0;
-
-    const head=chain[chain.length-1];
-    const nx=head.x+dir.dx, ny=head.y+dir.dy;
-
-    if (dotInBounds(N,nx,ny)){
-      const did=dId(N,nx,ny);
-      if (selfD[did]) return {ok:false, steps:step, collision:{kind:"self-dot", x:nx,y:ny}};
-      if (staticOcc.occD[did]) return {ok:false, steps:step, collision:{kind:"other-dot", x:nx,y:ny}};
-    }
-
-    const he=edgeBetweenDots(N, head.x,head.y, nx,ny);
-    if (he.t==="H"){
-      if (staticOcc.occH[he.id]) return {ok:false, steps:step, collision:{kind:"other-edge", edgeType:"H", edgeId:he.id}};
-      if (selfH[he.id])         return {ok:false, steps:step, collision:{kind:"self-edge",  edgeType:"H", edgeId:he.id}};
-    }
-    if (he.t==="V"){
-      if (staticOcc.occV[he.id]) return {ok:false, steps:step, collision:{kind:"other-edge", edgeType:"V", edgeId:he.id}};
-      if (selfV[he.id])         return {ok:false, steps:step, collision:{kind:"self-edge",  edgeType:"V", edgeId:he.id}};
-    }
-
-    chain.shift();
-    chain.push({x:nx,y:ny});
-    if (dotInBounds(N,nx,ny)) selfD[dId(N,nx,ny)]=1;
-    if (he.t==="H") selfH[he.id]=1;
-    if (he.t==="V") selfV[he.id]=1;
-  }
-
-  return {ok:false, steps:stepsLimit, collision:{kind:"timeout"}};
-}
-
-/* ---------- Gap utilities ---------- */
-function findEmptyDots(N, staticOcc){
-  const empties = [];
-  for (let y=0;y<N;y++){
-    for (let x=0;x<N;x++){
-      if (!staticOcc.occD[dId(N,x,y)]) empties.push({x,y});
-    }
-  }
-  return empties;
-}
-function hasFreeNeighbor(N, staticOcc, x,y){
-  for (let i=0;i<DIRS.length;i++){
-    const d=DIRS[i];
-    const nx=x+d.dx, ny=y+d.dy;
-    if (!dotInBounds(N,nx,ny)) continue;
-    if (staticOcc.occD[dId(N,nx,ny)]) continue;
-    const e=edgeBetweenDots(N,x,y,nx,ny);
-    if (!e.t) continue;
-    if (e.t==="H" && staticOcc.occH[e.id]) continue;
-    if (e.t==="V" && staticOcc.occV[e.id]) continue;
-    return true;
-  }
-  return false;
-}
-
-/* ---------- Grow an orthogonal polyline without overlaps ----------
-   Rules:
-   - segments are >= 2 edges (>= 3 dots) between turns
-   - can optionally force start at a given empty dot (gap fill)
---------------------------------------------------------------- */
-function growArrowVerticesInFreeSpace(rng, N, style, staticOcc, forcedStart){
-  const maxTurns = style.maxTurns || 220;
-  const minSeg   = Math.max(2, style.minSeg || 2);          // <<< enforce >=2
-  const maxSeg   = Math.max(minSeg, style.maxSeg || 6);
-  const allowStraightChance = (style.allowStraightChance ?? 0.05);
-  const margin   = style.margin || 0;
-  const minEdges = Math.max(2, style.minEdges || 2);        // <<< arrow must be >= 2 edges total
-  const maxEdgeLen = style.maxEdgeLen || 900;
-  const startTries = style.startTries || 1200;
-
-  let sx=0, sy=0, found=false;
-
-    if (forcedStart){
-      sx = forcedStart.x; sy = forcedStart.y;
-      const m = style.borderMargin ?? 3;
-      found = dotInBounds(N,sx,sy) &&
-              !staticOcc.occD[dId(N,sx,sy)] &&
-              borderDist(N,sx,sy) >= m;
-    } else {
-    const cx0 = (N-1) * 0.5;
-    const cy0 = (N-1) * 0.5;
-
-    function centeredSample(){
-      const g = () => (rng()+rng()+rng()+rng()) * 0.25;
-      const spread = 0.22;
-      const x = Math.round(cx0 + (g()-0.5) * (N-1) * spread);
-      const y = Math.round(cy0 + (g()-0.5) * (N-1) * spread);
-      return {
-        x: Math.max(margin, Math.min((N-1)-margin, x)),
-        y: Math.max(margin, Math.min((N-1)-margin, y))
-      };
-    }
-
-    for (let t=0;t<startTries;t++){
-      if (style.startBias === "center"){
-        const p = centeredSample();
-        sx = p.x; sy = p.y;
-      } else {
-        sx = rint(rng, margin, (N-1)-margin);
-        sy = rint(rng, margin, (N-1)-margin);
-      }
-
-      if (staticOcc.occD[dId(N,sx,sy)]) continue;
-      found=true; break;
-    }
-  }
-
-  if (!found) return null;
-
-  const usedD = new Uint8Array(N*N);
-  const usedH = new Uint8Array((N-1)*N);
-  const usedV = new Uint8Array(N*(N-1));
-  usedD[dId(N,sx,sy)] = 1;
-
-  // How "close to occupied stuff" is this dot? (0..4)
-  // Higher means it hugs existing lines/borders more.
-  function neighborOccScore(x, y){
-    let s = 0;
-
-    // out-of-bounds counts as occupied (helps avoid drifting into borders awkwardly)
-    if (x <= 0 || staticOcc.occD[dId(N, x-1, y)]) s++;
-    if (x >= N-1 || staticOcc.occD[dId(N, x+1, y)]) s++;
-    if (y <= 0 || staticOcc.occD[dId(N, x, y-1)]) s++;
-    if (y >= N-1 || staticOcc.occD[dId(N, x, y+1)]) s++;
-
-    return s;
-  }
-
-  function dotOk(nx,ny){
-    if (!dotInBounds(N,nx,ny)) return false;
-    const did = dId(N,nx,ny);
-    if (usedD[did]) return false;
-    if (staticOcc.occD[did]) return false;
-    return true;
-  }
-  const boundaryBias = style.boundaryBias ?? 0; // 0..1 (prefer tight areas)
-  const centerPull = style.centerPull ?? null;
-  const interiorBias = style.interiorBias ?? 0; // 0..1 (prefer open void)
-  
-  function edgeOk(cx,cy,nx,ny){
-    if (!dotOk(nx,ny)) return false;
-    if (centerPull){
-      const dx0 = cx - centerPull.cx, dy0 = cy - centerPull.cy;
-      const dx1 = nx - centerPull.cx, dy1 = ny - centerPull.cy;
-      const d20 = dx0*dx0 + dy0*dy0;
-      const d21 = dx1*dx1 + dy1*dy1;
-
-      // if this step increases distance, sometimes reject it
-      if (d21 > d20 && rng() < (centerPull.p || 0.25)) return false;
-    }
-	const sc = neighborOccScore(nx, ny); // 0..4
-
-	// --- interiorBias: prefer OPEN space (low sc) by rejecting tight moves ---
-	if (interiorBias > 0) {
-	  // sc: 0 open -> 4 tight. Make rejection grow with sc.
-	  const rejectP = interiorBias * (sc / 4);
-	  if (rng() < rejectP) return false;
+/*
+ * ARROWS, full-grid edition, v1.0.
+ * Standalone: no dependencies, network requests, account, or build step.
+ *
+ * Construction invariant:
+ * 1. Tile ALL cells with straight 2-cell pieces (plus 3-cell pieces on odd rows).
+ * 2. Rotate pairs in 2x2 squares to randomize the exact tiling.
+ * 3. Peel exposed straight pieces to obtain a valid removal rank.
+ * 4. Join later pieces onto earlier tails, or insert them into body detours.
+ *    An earlier head and its first edge never change. Its exit was already
+ *    clear while all the absorbed, later cells were still occupied.
+ * 5. Reorient completed paths using a dependency-driven peel, then verify
+ *    every cell, edge, and move independently before accepting the level.
+ * No cropping, partial boards, singleton filler dots, or retry-until-lucky loop.
+ */
+'use strict';
+function createEngine() {
+	function rngFrom(seed) {
+		let t = seed >>> 0;
+		return () => {
+			t = (t + 0x6d2b79f5) | 0;
+			let r = Math.imul(t ^ t >>> 15, 1 | t);
+			r ^= r + Math.imul(r ^ r >>> 7, 61 | r);
+			return ((r ^ r >>> 14) >>> 0) / 4294967296;
+		};
 	}
-
-	// --- boundaryBias: prefer STITCHING (high sc) by rejecting open moves ---
-	if (boundaryBias > 0) {
-	  // reject more when sc is low (open)
-	  const rejectP = boundaryBias * ((4 - sc) / 4);
-	  if (rng() < rejectP) return false;
-	}
-  
-    const e = edgeBetweenDots(N,cx,cy,nx,ny);
-    if (!e.t) return false;
-  
-    if (e.t==="H"){
-      if (usedH[e.id]) return false;
-      if (staticOcc.occH[e.id]) return false;
-    } else { // "V"
-      if (usedV[e.id]) return false;
-      if (staticOcc.occV[e.id]) return false;
-    }
-    return true;
-  }
-
-
-  function commit(cx,cy,nx,ny){
-    usedD[dId(N,nx,ny)] = 1;
-    const e=edgeBetweenDots(N,cx,cy,nx,ny);
-    if (e.t==="H") usedH[e.id]=1;
-    if (e.t==="V") usedV[e.id]=1;
-  }
-
-  let dir = choice(rng, DIRS);
-  const verts=[{x:sx,y:sy}];
-
-  // Ensure first edge exists
-  let started=false;
-  for (let tries=0; tries<8 && !started; tries++){
-    const d = (tries===0) ? dir : DIRS[tries%4];
-    const nx=sx+d.dx, ny=sy+d.dy;
-    if (edgeOk(sx,sy,nx,ny)){
-      commit(sx,sy,nx,ny);
-      verts.push({x:nx,y:ny});
-      dir = d;
-      started=true;
-    }
-  }
-  if (!started) return null;
-
-  let edgesBuilt = 1;
-  let turns = 0;
-
-  // Turning behavior knobs:
-  // - turnEvery: average "chunk" length in edges before a turn opportunity
-  // - turnChance: chance to turn at each opportunity (after meeting min segment)
-  const turnEvery   = style.turnEvery   ?? 2;    // 2 => very turny
-  const turnChance  = style.turnChance  ?? 0.85; // 0.85 => almost always turn
-  const maxStraight = style.maxStraight ?? maxSeg; // safety cap
-
-  while (turns < maxTurns && edgesBuilt < maxEdgeLen){
-    const last = verts[verts.length-1];
-    let cx = last.x, cy = last.y;
-
-    // We build in small "chunks" so we can turn often.
-    // But we still enforce minSeg >= 2 edges between turns.
-    let movedThisVertex = 0;
-
-    // Choose a target straight run length for this vertex (keeps some variety)
-    const target = Math.min(maxStraight, Math.max(minSeg, rint(rng, minSeg, maxSeg)));
-
-    while (movedThisVertex < target && edgesBuilt < maxEdgeLen){
-      const nx = cx + dir.dx, ny = cy + dir.dy;
-      if (!edgeOk(cx,cy,nx,ny)) break;
-      commit(cx,cy,nx,ny);
-      cx = nx; cy = ny;
-      edgesBuilt++;
-      movedThisVertex++;
-
-      // After we've moved at least minSeg edges from the last turn/vertex,
-      // we get frequent opportunities to turn.
-      if (movedThisVertex >= minSeg){
-        if ((movedThisVertex % turnEvery) === 0){
-          // honor allowStraightChance (rarely keep going straight)
-          const willConsiderTurn = (rng() >= allowStraightChance);
-
-          if (willConsiderTurn && rng() < turnChance){
-            // commit a vertex at the current position (turn happens at this dot)
-            verts.push({x:cx,y:cy});
-
-            // pick a perpendicular direction
-			// pick a perpendicular direction that hugs existing stuff (higher neighborOccScore),
-			// while still being feasible for at least the next step.
-			let candA, candB;
-			if (dir.k==="U"||dir.k==="D"){ candA = DIRS[2]; candB = DIRS[3]; } // L/R
-			else                         { candA = DIRS[0]; candB = DIRS[1]; } // U/D
-
-			function firstStepScore(d){
-			  const nx = cx + d.dx, ny = cy + d.dy;
-			  if (!edgeOk(cx, cy, nx, ny)) return -1e9;
-			  // Prefer stitchiness immediately
-			  return neighborOccScore(nx, ny);
+	function generate(N, seed) {
+		if (!Number.isInteger(N) || N < 8 || N > 200) throw new RangeError('Grid size must be an integer from 8 to 200.');
+		if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) throw new RangeError('Seed must be an integer from 0 to 4294967295.');
+		const start = performance.now(), rng = rngFrom(seed);
+		const total = N * N, owner = new Int32Array(total);
+		const tiles = [];
+		for (let y = 0; y < N; y++) {
+			const tripleX = N % 2 ? 2 * Math.floor(rng() * ((N - 1) / 2)) : -1;
+			for (let x = 0; x < N;) {
+				const len = x === tripleX ? 3 : 2;
+				const cells = Array.from({length:len}, (_, k) => y * N + x + k);
+				const id = tiles.length;
+				tiles.push({ cells });
+				for (const c of cells) owner[c] = id;
+				x += len;
 			}
-
-			const sA = firstStepScore(candA);
-			const sB = firstStepScore(candB);
-
-			// Mostly take the better “hugging” turn, but keep a little entropy
-			if (sA === sB){
-			  dir = (rng() < 0.5) ? candA : candB;
-			} else {
-			  const best = (sA > sB) ? candA : candB;
-			  const other= (sA > sB) ? candB : candA;
-			  dir = (rng() < 0.85) ? best : other;
-			}
-
-            turns++;
-            movedThisVertex = 0; // reset segment length after a turn
-            // continue building from the same (cx,cy) but in new dir
-          }
-        }
-      }
-    }
-
-    // If we couldn't move enough to make a valid segment, stop.
-    if (movedThisVertex > 0 && movedThisVertex < minSeg) break;
-
-    // If we ended with a straight run (no turn at end), add a vertex here.
-    // (But avoid pushing duplicates.)
-    const tail = verts[verts.length-1];
-    if (!tail || tail.x !== cx || tail.y !== cy){
-      verts.push({x:cx,y:cy});
-    }
-
-    // If we made zero progress, we’re stuck.
-    if (movedThisVertex === 0) break;
-
-    // If we didn't turn during this iteration, count it as a "turn opportunity" consumed.
-    // (This keeps maxTurns meaningful.)
-    turns++;
-  }
-
-  if (edgesBuilt < minEdges) return null;
-  if (verts.length < 2) return null;
-  return verts;
-}
-function buildEdgeFrontier(N, staticOcc, edgeBand){
-  const out = [];
-  for (let y=0;y<N;y++){
-    for (let x=0;x<N;x++){
-      const id = dId(N,x,y);
-      if (staticOcc.occD[id]) continue;
-      if (!hasFreeNeighbor(N, staticOcc, x, y)) continue;
-
-      const bd = borderDist(N, x, y);
-      if (bd > edgeBand) continue;         // ONLY near edge band
-
-      const sc = neighborOccScore(N, staticOcc, x, y); // 0..4
-      if (sc >= 1) out.push({x,y, bd, sc});
-    }
-  }
-  return out;
-}
-
-function pickEdgeFrontier(rng, edgeFrontier){
-  if (!edgeFrontier.length) return null;
-  // bias to bd=0/1 (closest to border)
-  let best = null;
-  let bestScore = Infinity;
-  const SAMP = Math.min(edgeFrontier.length, 128);
-  for (let i=0;i<SAMP;i++){
-    const p = edgeFrontier[(rng()*edgeFrontier.length)|0];
-    // lower is better: bd dominates, then prefer higher sc (stitchiness)
-	const targetBd = 2;
-	const score =
-	  Math.abs(p.bd - targetBd) * 2.2 +   // closest to bd≈2 wins
-	  (4 - p.sc) * 0.7 +                  // still like stitching
-	  rng() * 0.25;
-    if (score < bestScore){ bestScore = score; best = p; }
-  }
-  return best ? {x:best.x, y:best.y} : null;
-}
-/* ---------- Blob level then crop approach --------------- */
-function generateLevelBlobThenCrop(N, seed){
-  // Big working canvas (a bit bigger helps)
-  const margin = Math.max(12, Math.floor(N * 0.45)); // was 0.25
-  const Nbig = N + margin*2;
-
-  // 1) Generate on big grid
-  const big = generateLevelFillUntilStuck(Nbig, seed);
-  if (!big || !big.arrows || big.arrows.length < 1) return { N, arrows: [] };
-
-  // 2) Pick best N×N crop window (densest dots)
-  const win = findBestCropWindow(Nbig, big.arrows, N);
-  const x0 = win.x0;
-  const y0 = win.y0;
-
-  // 3) Crop + rebuild
-  let cropped = cropAndRebuildArrows(Nbig, big.arrows, x0, y0, N);
-  cropped = keepLargestOccupiedComponent(N, cropped); // <<<<<< NEW
-  return { N, arrows: cropped };
-}
-
-
-/* ---------- Level generator (fill until stuck) ---------- */
-function generateLevelFillUntilStuck(N, seed){
-  const rng = mulberry32(seed);
-  const staticOcc = makeOcc(N);
-  const arrows = [];
-
-  const maxArrows = 9000;
-  let blobBB = null;
-  // --- Multi-seed count ---
-  const seedCount = 1; // <<<<<< single colony
-
-  // --- Seed placement (center-biased) ---
-  const cx0 = (N-1) * 0.5;
-  const cy0 = (N-1) * 0.5;
-  function centeredDot(){
-    // average-of-uniforms => approx gaussian-ish
-    const g = () => (rng()+rng()+rng()+rng()) * 0.25;
-	const spread = 0.22
-    const x = Math.round(cx0 + (g()-0.5) * (N-1) * spread);
-    const y = Math.round(cy0 + (g()-0.5) * (N-1) * spread);
-    return {
-      x: Math.max(2, Math.min((N-1)-2, x)),
-      y: Math.max(2, Math.min((N-1)-2, y)),
-    };
-  }
-
-
-  // Styles (same “language” as your current ones)
-  const STYLE_SEED_SWEEP = {
-    maxTurns: 240,
-    minSeg: 2,
-    maxSeg: 10,
-    turnEvery: 2,
-    turnChance: 0.90,
-    allowStraightChance: 0.05,
-  
-    interiorBias: 0.05,   // almost none
-    boundaryBias: 0.60,   // start hugging early
-  
-    minEdges: 2,
-    startBias: "any",
-    borderMargin: 2
-  };
-  
-
-  const STYLE_STITCH = {
-    maxTurns: 200,
-    minSeg: 2,
-    maxSeg: 6,
-    turnEvery: 2,
-    turnChance: 0.95,
-    allowStraightChance: 0.02,
-  
-    interiorBias: 0.12,
-    boundaryBias: 0.65,
-  
-    minEdges: 2,
-    startBias: "any",
-    borderMargin: 0
-  };
-  
-const STYLE_BITE = {
-  maxTurns: 200,
-  minSeg: 2,
-  maxSeg: 7,
-  turnEvery: 2,
-  turnChance: 0.93,
-  allowStraightChance: 0.03,
-
-  interiorBias: 0.10,   // don't chase open void hard
-  boundaryBias: 0.55,   // stitch around existing blob
-
-  minEdges: 2,
-  startBias: "any",
-  borderMargin: 0
-};
-
-
-  // --- Place seeds ---
-  const seeds = [];
-  let seedTries = 0;
-
-  while (seeds.length < seedCount && seedTries < 3000){
-    seedTries++;
-  
-    const s = centeredDot();   // <<<<<< no "anywhere" seeds
-    if (staticOcc.occD[dId(N,s.x,s.y)]) continue;
-    if (!hasFreeNeighbor(N, staticOcc, s.x, s.y)) continue;
-  
-	const blobCx = (blobBB.minX + blobBB.maxX) * 0.5;
-	const blobCy = (blobBB.minY + blobBB.maxY) * 0.5;
-
-	// pick style
-	const baseStyle = (rng() < 0.85) ? STYLE_STITCH : STYLE_BITE;
-
-	// clone + inject centerPull (don’t mutate the constants)
-	const style = {
-	  ...baseStyle,
-	  centerPull: {
-		cx: blobCx,
-		cy: blobCy,
-		p: (baseStyle === STYLE_STITCH) ? 0.45 : 0.25
-	  }
-	};
-
-	const verts = growArrowVerticesInFreeSpace(rng, N, style, staticOcc, start);
-    if (!verts) continue;
-  
-    const arrow = buildArrowFromVertices(N, verts);
-    if (!arrow) continue;
-    if (arrow.chain.length < 9) continue;
-    if (violatesSelfAim(N, arrow)) continue;
-  
-    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
-    if (!sim.ok) continue;
-  
-    occupyStatic(staticOcc, arrow, 1);
-    arrows.push(arrow);
-    seeds.push({x:s.x,y:s.y});
-	blobBB = initBBoxFromArrow(arrow);
-  }
-  
-
-  // If we couldn’t place seeds, bail to avoid empty levels
-  if (arrows.length < 1){
-    return { N, arrows };
-  }
-  if (!blobBB) blobBB = initBBoxFromArrow(arrows[0]);
-  // --- Frontier growth loop ---
-  let frontier = buildFrontier(N, staticOcc);
-  let sinceRefresh = 0;
-
-  let fails = 0;
-  const maxFails = Math.max(N*N*10, 24000);
-  let frontierRefreshEvery = 3;
-
-  while (arrows.length < maxArrows && fails < maxFails){
-    if (!frontier.length) break;
-
-    // periodic refresh to keep frontier accurate
-    if (sinceRefresh >= frontierRefreshEvery){
-      frontier = buildFrontier(N, staticOcc);
-      sinceRefresh = 0;
-      if (!frontier.length) break;
-    }
-
-    // pick a start near one of the seeds
-    // Occasionally force exploration away from the current colony
-	const mode = (rng() < 0.80) ? "expand" : "fill";
-	const start = pickFrontierByBlobRim(rng, N, frontier, blobBB, mode);
-	
-    if (!start) { fails++; continue; }
-
-    // alternate between "bite into void" and "stitch along edges"
-	const style = (rng() < 0.85) ? STYLE_STITCH : STYLE_BITE;
-
-    const verts = growArrowVerticesInFreeSpace(rng, N, style, staticOcc, start);
-    if (!verts) { fails++; sinceRefresh++; continue; }
-
-    const arrow = buildArrowFromVertices(N, verts);
-    if (!arrow) { fails++; sinceRefresh++; continue; }
-
-    // allow short-ish ones in frontier fill, but keep stubs out
-    if (arrow.chain.length < 5) { fails++; sinceRefresh++; continue; }
-    if (violatesSelfAim(N, arrow)) { fails++; sinceRefresh++; continue; }
-
-    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
-    if (!sim.ok) { fails++; sinceRefresh++; continue; }
-
-    occupyStatic(staticOcc, arrow, 1);
-    arrows.push(arrow);
-    expandBBoxWithArrow(blobBB, arrow);
-    // “re-seed” occasionally so growth doesn’t collapse into one region
-    if (rng() < 0.015){
-	  const head = arrow.chain[arrow.chain.length - 1];
-	  const tail = arrow.chain[0];
-
-	  // Always anchor the new head (where we just expanded).
-	  seeds.push({ x: head.x, y: head.y });
-
-	  // Often anchor the tail too (helps wrap around and avoid "fan rays").
-	  if (rng() < 0.60) seeds.push({ x: tail.x, y: tail.y });
-
-	  // Sometimes anchor a random interior point to keep variety.
-	  if (rng() < 0.25) {
-		const p = arrow.chain[(rng() * arrow.chain.length) | 0];
-		seeds.push({ x: p.x, y: p.y });
-	  }
-
-	  // Keep more anchors than before.
-	  while (seeds.length > 64) seeds.shift();
-	}
-
-    // successes reset fail counter and slowly reduce refresh cost
-    fails = 0;
-    sinceRefresh++;
-  }
-  // --- Phase A2: Edge sweep fill (cheap + effective) ---
-if (false){
-  const edgeBand = Math.max(2, Math.floor(N * 0.10)); // N=70 => 7
-  const EDGE_STYLE = {
-    maxTurns: 160,
-    minSeg: 2,
-    maxSeg: 9,
-    turnEvery: 2,
-    turnChance: 0.90,
-    allowStraightChance: 0.06,
-  
-    interiorBias: 0.12,   // NEW: a little openness preference
-    boundaryBias: 0.55,   // was 0.80 (too clingy)
-  
-    minEdges: 2,
-    startBias: "any",
-    borderMargin: 0
-  };
-
-  let edgeFrontier = buildEdgeFrontier(N, staticOcc, edgeBand);
-  let edgeFails = 0;
-  const edgeFailLimit = Math.max(N*N*4, 8000);
-
-  while (edgeFrontier.length && edgeFails < edgeFailLimit && arrows.length < maxArrows){
-    const start = pickEdgeFrontier(rng, edgeFrontier);
-    if (!start) break;
-
-    const verts = growArrowVerticesInFreeSpace(rng, N, EDGE_STYLE, staticOcc, start);
-    if (!verts){ edgeFails++; if ((edgeFails % 12)===0) edgeFrontier = buildEdgeFrontier(N, staticOcc, edgeBand); continue; }
-
-    const arrow = buildArrowFromVertices(N, verts);
-    if (!arrow){ edgeFails++; continue; }
-
-    // allow small-ish edge fillers, but no stubs
-    if (arrow.chain.length < 5){ edgeFails++; continue; }
-    if (violatesSelfAim(N, arrow)){ edgeFails++; continue; }
-
-    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
-    if (!sim.ok){ edgeFails++; continue; }
-
-    occupyStatic(staticOcc, arrow, 1);
-    arrows.push(arrow);
-
-    edgeFails = 0;
-    // refresh occasionally
-    if ((arrows.length % 8)===0) edgeFrontier = buildEdgeFrontier(N, staticOcc, edgeBand);
-  }
-}
-  
-  
-  return { N, arrows };
-}
-
-
-/* ---------- Scoring (coverage + variety) ---------- */
-function scoreLevel(level){
-  const N = level.N;
-  const totalDots = N * N;
-
-  function borderDistLocal(x,y){
-    const a = x, b = y, c = (N-1)-x, d = (N-1)-y;
-    return Math.min(a,b,c,d);
-  }
-
-  let usedDots = 0;
-  let centerUsed = 0;
-  let avgLen = 0;
-  let micro = 0;
-  let longish = 0;
-  let veryLong = 0;
-  let borderUsed = 0;
-
-  // “center box” ~ middle 60%
-  const x0 = Math.floor(N * 0.20);
-  const x1 = Math.ceil (N * 0.80);
-  const y0 = Math.floor(N * 0.20);
-  const y1 = Math.ceil (N * 0.80);
-
-  const veryLongThresh = Math.max(26, Math.floor(N * 0.35));
-
-  for (let i=0;i<level.arrows.length;i++){
-    const a = level.arrows[i];
-    const len = a.chain.length;
-
-    usedDots += len;
-    avgLen += len;
-
-    if (len < 9) micro++;
-    if (len >= Math.max(16, N * 0.12)) longish++;
-    if (len >= veryLongThresh) veryLong++;
-
-    for (let k=0;k<a.chain.length;k++){
-      const p = a.chain[k];
-
-      if (p.x>=x0 && p.x<x1 && p.y>=y0 && p.y<y1) centerUsed++;
-
-      // penalize heavy border usage (distance 0 or 1 from border)
-      if (borderDistLocal(p.x,p.y) < 2) borderUsed++;
-    }
-  }
-
-  if (level.arrows.length) avgLen /= level.arrows.length;
-
-  const coverage = usedDots / totalDots;
-  const centerArea = (x1-x0) * (y1-y0);
-  const centerCoverage = centerArea ? (centerUsed / centerArea) : 0;
-
-  const microPenalty = micro / Math.max(1, level.arrows.length);
-  const lengthBonus = Math.min(1, avgLen / Math.max(10, N * 0.08));
-  const variety = Math.min(1, (longish / Math.max(1, level.arrows.length)) * 2.0);
-
-  const borderPenalty = borderUsed / Math.max(1, usedDots);
-
-  // NEW: void (largest empty component) penalty
-  const stats = largestEmptyComponentStats(N, level);
-  const largestEmptyFrac = stats.largest / totalDots;
-  const secondEmptyFrac  = stats.second  / totalDots;
-  const emptyFrac        = stats.emptyCount / totalDots;
-
-  // NEW: reward *some* very long hero strokes (but cap it)
-  const heroBonus = Math.min(1, veryLong / 3) * 0.55;
-
-  // weights: center first, then coverage, then “nice long-ish” lines,
-  // punish border-hugging, and punish giant void lakes.
-  return (
-    centerCoverage   * 4.2 +
-    coverage         * 2.2 +
-    lengthBonus      * 0.9 +
-    variety          * 0.6 +
-    heroBonus        * 1.0 -
-    microPenalty     * 2.8 -
-    borderPenalty    * 2.6 -
-    emptyFrac        * 4.0 -
-    largestEmptyFrac * 10.0 -
-    secondEmptyFrac  * 4.0 +
-    level.arrows.length * 0.00015
-  );
-}
-
-/* ---------- Incremental improvement helpers ---------- */
-
-// Rebuild staticOcc from an arrows array (safe, simpler; optimize later)
-function rebuildOccFromArrows(N, arrows){
-  const occ = makeOcc(N);
-  for (let i=0;i<arrows.length;i++){
-    occupyStatic(occ, arrows[i], 1);
-  }
-  return occ;
-}
-
-// Compute dot-occupancy from arrows (for void analysis)
-function buildOccDFromArrows(N, arrows){
-  const occD = new Uint8Array(N*N);
-  for (let i=0;i<arrows.length;i++){
-    const ch = arrows[i].chain;
-    for (let k=0;k<ch.length;k++){
-      const p = ch[k];
-      occD[dId(N,p.x,p.y)] = 1;
-    }
-  }
-  return occD;
-}
-
-// Return an array of dotIds belonging to the *largest* empty component
-function largestEmptyComponentDots(N, occD){
-  const seen = new Uint8Array(N*N);
-  let best = null;
-  let bestSize = 0;
-
-  // BFS queue (dot ids)
-  const q = new Int32Array(N*N);
-
-  for (let y=0;y<N;y++){
-    for (let x=0;x<N;x++){
-      const id0 = dId(N,x,y);
-      if (occD[id0] || seen[id0]) continue;
-
-      let head = 0, tail = 0;
-      q[tail++] = id0;
-      seen[id0] = 1;
-
-      // store component ids in a normal array (size varies)
-      const comp = [];
-      while (head < tail){
-        const id = q[head++];
-        comp.push(id);
-
-        const cx = id % N;
-        const cy = (id / N) | 0;
-
-        // 4-neighborhood
-        let nid;
-
-        if (cx+1 < N){
-          nid = id + 1;
-          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
-          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
-        }
-        if (cx-1 >= 0){
-          nid = id - 1;
-          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
-          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
-        }
-        if (cy+1 < N){
-          nid = id + N;
-          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
-          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
-        }
-        if (cy-1 >= 0){
-          nid = id - N;
-          if (!seen[nid] && !occD[nid]){ seen[nid]=1; q[tail++] = nid; }
-          else if (!seen[nid] && occD[nid]){ seen[nid]=1; }
-        }
-      }
-
-      if (comp.length > bestSize){
-        bestSize = comp.length;
-        best = comp;
-      }
-    }
-  }
-  return best || [];
-}
-
-// Score how much an arrow borders a given empty-set (higher => good candidate to remove)
-function arrowBorderScore(N, arrow, emptyMark){
-  let s = 0;
-  const ch = arrow.chain;
-  for (let i=0;i<ch.length;i++){
-    const p = ch[i];
-    const x = p.x, y = p.y;
-
-    // check 4 neighbors; if empty, count it
-    if (x>0   && emptyMark[dId(N,x-1,y)]) s++;
-    if (x<N-1 && emptyMark[dId(N,x+1,y)]) s++;
-    if (y>0   && emptyMark[dId(N,x,y-1)]) s++;
-    if (y<N-1 && emptyMark[dId(N,x,y+1)]) s++;
-  }
-  return s;
-}
-
-// Remove k arrows biased to those bordering largest void
-function removeVoidBoundaryArrows(rng, N, arrows, k){
-  if (arrows.length <= k) return arrows.slice(0, Math.max(0, arrows.length-k));
-
-  const occD = buildOccDFromArrows(N, arrows);
-  const voidDots = largestEmptyComponentDots(N, occD);
-  if (!voidDots.length) return arrows.slice();
-
-  const emptyMark = new Uint8Array(N*N);
-  for (let i=0;i<voidDots.length;i++) emptyMark[voidDots[i]] = 1;
-
-  // Score each arrow; keep top candidates
-  const scored = [];
-  for (let i=0;i<arrows.length;i++){
-    const sc = arrowBorderScore(N, arrows[i], emptyMark);
-    if (sc > 0) scored.push({i, sc});
-  }
-  if (!scored.length) return arrows.slice();
-
-  scored.sort((a,b)=>b.sc-a.sc);
-
-  // pick removals from top M with slight randomness
-  const M = Math.min(scored.length, Math.max(8, k*6));
-  const pickPool = scored.slice(0, M);
-
-  const removeSet = new Uint8Array(arrows.length);
-  let removed = 0;
-  while (removed < k && pickPool.length){
-    // biased random: square
-    const r = rng(); 
-    const idx = Math.floor((r*r) * pickPool.length);
-    const ai = pickPool[idx].i;
-
-    if (!removeSet[ai]){
-      removeSet[ai] = 1;
-      removed++;
-    }
-    pickPool.splice(idx, 1);
-  }
-
-  const kept = [];
-  for (let i=0;i<arrows.length;i++){
-    if (!removeSet[i]) kept.push(arrows[i]);
-  }
-  return kept;
-}
-
-// Run your gap-fill phase on an existing (partial) board
-function gapFillFromOcc(rng, N, staticOcc, arrows, budgetIters){
-  let gapFails = 0;
-  const gapFailLimit = Math.max(budgetIters|0, N*N*2);
-
-  while (gapFails < gapFailLimit){
-	let anyEmpty = false;
-	let anyStartable = false;
-
-	for (let y=0;y<N;y++){
-	  for (let x=0;x<N;x++){
-		if (!staticOcc.occD[dId(N,x,y)]) {
-		  anyEmpty = true;
-		  if (hasFreeNeighbor(N, staticOcc, x, y)) { anyStartable = true; break; }
 		}
-	  }
-	  if (anyStartable) break;
+		// Local domino rotations preserve exact coverage, without search or rejection restarts.
+		for (let k = 0; k < total * 20; k++) {
+			const x = Math.floor(rng() * (N - 1)), y = Math.floor(rng() * (N - 1));
+			const a = y * N + x, b = a + 1, c = a + N, d = c + 1;
+			const p = owner[a], q = owner[d];
+			if (p === q || tiles[p].cells.length !== 2 || tiles[q].cells.length !== 2) continue;
+			if (owner[b] === p && owner[c] === q) {
+				tiles[p].cells = [a,c]; tiles[q].cells = [b,d]; owner[c] = p; owner[b] = q;
+			} else if (owner[c] === p && owner[b] === q) {
+				tiles[p].cells = [a,b]; tiles[q].cells = [c,d]; owner[b] = p; owner[c] = q;
+			}
+		}
+		const remaining = new Uint8Array(tiles.length).fill(1);
+		const loX = new Int32Array(N), hiX = new Int32Array(N).fill(N - 1);
+		const loY = new Int32Array(N), hiY = new Int32Array(N).fill(N - 1);
+		const queued = new Uint8Array(tiles.length), bag = [];
+		function expose(cell, delta, mask) {
+			const id = owner[cell];
+			if (!remaining[id] || queued[id] & mask) return;
+			const a = tiles[id].cells, last = a.length - 1;
+			let reversed;
+			if (a[0] === cell && a[0] - a[1] === delta) reversed = false;
+			else if (a[last] === cell && a[last] - a[last - 1] === delta) reversed = true;
+			else return;
+			queued[id] |= mask; bag.push({id, reversed});
+		}
+		function refreshRow(y) {
+			while (loX[y] < N && !remaining[owner[y*N+loX[y]]]) loX[y]++;
+			while (hiX[y] >= 0 && !remaining[owner[y*N+hiX[y]]]) hiX[y]--;
+			if (loX[y] < N) expose(y*N+loX[y], -1, 1);
+			if (hiX[y] >= 0) expose(y*N+hiX[y], 1, 2);
+		}
+		function refreshCol(x) {
+			while (loY[x] < N && !remaining[owner[loY[x]*N+x]]) loY[x]++;
+			while (hiY[x] >= 0 && !remaining[owner[hiY[x]*N+x]]) hiY[x]--;
+			if (loY[x] < N) expose(loY[x]*N+x, -N, 4);
+			if (hiY[x] >= 0) expose(hiY[x]*N+x, N, 8);
+		}
+		for (let k = 0; k < N; k++) { refreshRow(k); refreshCol(k); }
+		const order = [];
+		while (bag.length) {
+			const pick = Math.floor(rng()*bag.length), entry = bag[pick];
+			bag[pick] = bag[bag.length - 1]; bag.pop();
+			const {id, reversed} = entry;
+			if (!remaining[id]) continue;
+			remaining[id] = 0;
+			if (reversed) tiles[id].cells.reverse();
+			tiles[id].rank = order.length; order.push(id);
+			for (const cell of tiles[id].cells) { refreshRow(Math.floor(cell/N)); refreshCol(cell%N); }
+		}
+		if (order.length !== tiles.length) throw Error('Base tiling could not be peeled.');
+		const live = new Uint8Array(tiles.length).fill(1);
+		function neighbors(c) {
+			const result = [], x = c % N, y = Math.floor(c / N);
+			if (x > 0) result.push(c - 1);
+			if (x + 1 < N) result.push(c + 1);
+			if (y > 0) result.push(c - N);
+			if (y + 1 < N) result.push(c + N);
+			return result;
+		}
+		// Absorb later-removable pieces into an earlier piece's tail. Its exit remains valid.
+		for (let pass = 0; pass < 3; pass++) {
+			for (const id of order) {
+				if (!live[id]) continue;
+				const a = tiles[id];
+				const target = pass === 0 ? 6 + Math.floor(rng()*rng()*34) : 35;
+				while (a.cells.length < target) {
+					const tail = a.cells[a.cells.length - 1];
+					const prev = a.cells.length > 1 ? tail - a.cells[a.cells.length - 2] : 0;
+					let best = null, bestScore = -Infinity;
+					for (const cell of neighbors(tail)) {
+						const other = owner[cell], b = tiles[other];
+						if (other === id || !live[other] || b.rank < a.rank) continue;
+						if (b.cells[0] !== cell && b.cells[b.cells.length - 1] !== cell) continue;
+						if (a.cells.length + b.cells.length > 48) continue;
+						if (pass > 0 && a.cells.length >= 6 && b.cells.length >= 6) continue;
+						const score = rng()*2 + (prev !== cell-tail ? 0.45 : 0) + (b.cells.length < 5 ? 0.4 : 0);
+						if (score > bestScore) { bestScore = score; best = {other, cell}; }
+					}
+					if (!best) break;
+					const b = tiles[best.other];
+					if (b.cells[0] !== best.cell) b.cells.reverse();
+					a.cells.push(...b.cells);
+					for (const cell of b.cells) owner[cell] = id;
+					live[best.other] = 0;
+				}
+			}
+		}
+		// Fold small late pieces into an earlier path through a local detour.
+		// Never change its first edge: that edge is the certified exit direction.
+		for (let pass = 0; pass < 3; pass++) {
+			for (const id of order) {
+				if (!live[id] || tiles[id].cells.length > 6) continue;
+				const b = tiles[id];
+				let done = false;
+				for (const reverse of [false, true]) {
+					const bc = reverse ? b.cells.slice().reverse() : b.cells;
+					for (const near of neighbors(bc[0])) {
+						const aid = owner[near], a = tiles[aid];
+						if (aid === id || !live[aid] || a.rank > b.rank || a.cells.length + bc.length > 64) continue;
+						const i = a.cells.indexOf(near);
+						if (i < 1 || i >= a.cells.length - 1) continue;
+						const end = bc[bc.length - 1], next = a.cells[i+1];
+						if (Math.abs(end%N-next%N)+Math.abs(Math.floor(end/N)-Math.floor(next/N)) !== 1) continue;
+						a.cells.splice(i+1, 0, ...bc);
+						for (const c of bc) owner[c] = aid;
+						live[id] = 0; done = true; break;
+					}
+					if (done) break;
+				}
+			}
+		}
+		const arrows = [];
+		for (const id of order) if (live[id]) {
+			const cells = tiles[id].cells;
+			for (const c of cells) owner[c] = arrows.length;
+			arrows.push({cells});
+		}
+		// Orient the completed paths by peeling again. Prefer newly opened, deeper routes.
+		const options = [], waiting = Array.from({length:arrows.length}, () => []);
+		const free = [];
+		function ray(cells, reverse) {
+			const i = reverse ? cells.length - 1 : 0, j = reverse ? i - 1 : 1;
+			let x = cells[i] % N, y = Math.floor(cells[i]/N);
+			const dx = x - cells[j]%N, dy = y - Math.floor(cells[j]/N);
+			const blockers = new Set();
+			let len = 0;
+			for (x += dx, y += dy; x >= 0 && x < N && y >= 0 && y < N; x += dx, y += dy) {
+				const id = owner[y*N+x];
+				if (id === owner[cells[0]]) return null;
+				blockers.add(id); len++;
+			}
+			return { blockers, len };
+		}
+		for (let id = 0; id < arrows.length; id++) for (const reverse of [false,true]) {
+			const r = ray(arrows[id].cells, reverse);
+			if (!r) continue;
+			const oi = options.length;
+			options.push({id, reverse, count:r.blockers.size, score:r.blockers.size * 8 + r.len + rng()*8});
+			for (const b of r.blockers) waiting[b].push(oi);
+			if (!r.blockers.size) free.push(oi);
+		}
+		const removed = new Uint8Array(arrows.length), solution = [];
+		while (free.length) {
+			let best = 0;
+			for (let i = 1; i < free.length; i++) if (options[free[i]].score > options[free[best]].score) best = i;
+			const option = options[free[best]];
+			free[best] = free[free.length - 1]; free.pop();
+			if (removed[option.id]) continue;
+			removed[option.id] = 1;
+			if (option.reverse) arrows[option.id].cells.reverse();
+			solution.push(option.id);
+			for (const oi of waiting[option.id]) if (--options[oi].count === 0) free.push(oi);
+		}
+		if (solution.length !== arrows.length) throw Error('Path orientation failed.');
+		return {N, seed, arrows, solution, ms: performance.now() - start};
 	}
-	if (!anyEmpty) break;
-	if (!anyStartable) break;
+	function validate(level) {
+		const {N, arrows, solution} = level, owner = new Int32Array(N*N).fill(-1);
+		let count = 0, turns = 0, short = 0;
+		for (let id = 0; id < arrows.length; id++) {
+			const c = arrows[id].cells;
+			if (c.length < 2) throw Error('Singleton');
+			if (c.length < 5) short++;
+			for (let k = 0; k < c.length; k++) {
+				if (!Number.isInteger(c[k]) || c[k] < 0 || c[k] >= N*N || owner[c[k]] !== -1) throw Error('Overlap/bounds');
+				owner[c[k]] = id; count++;
+				if (k > 0 && Math.abs(c[k]%N-c[k-1]%N)+Math.abs(Math.floor(c[k]/N)-Math.floor(c[k-1]/N)) !== 1) throw Error('Disconnected');
+				if (k > 1 && c[k]-c[k-1] !== c[k-1]-c[k-2]) turns++;
+			}
+		}
+		if (count !== N*N) throw Error('Unfilled cells');
+		function blocked(id) {
+			const c = arrows[id].cells;
+			let x = c[0]%N, y = Math.floor(c[0]/N);
+			const dx = x-c[1]%N, dy = y-Math.floor(c[1]/N);
+			for (x+=dx,y+=dy; x>=0&&x<N&&y>=0&&y<N; x+=dx,y+=dy) if (owner[y*N+x] !== -1) return true;
+			return false;
+		}
+		const open = arrows.reduce((sum, a, id) => sum+(!blocked(id)), 0);
+		const seen = new Set();
+		for (const id of solution) {
+			if (seen.has(id)) throw Error('Repeated solution');
+			seen.add(id);
+			if (blocked(id)) throw Error('Invalid solution '+id);
+			for (const cell of arrows[id].cells) owner[cell] = -1;
+		}
+		if (seen.size !== arrows.length) throw Error('Incomplete solution');
+		return {N, arrows:arrows.length, mean:(count/arrows.length).toFixed(1), short, turns:(turns/arrows.length).toFixed(1), open, ms:Number(level.ms || 0).toFixed(1)};
+	}
+	return {generate, validate};
+}
+if (typeof module !== 'undefined') module.exports = createEngine;
 
-    const start = pickStartInLargestComponent(rng, N, staticOcc);
-    if (!start) break;
+</script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const canvas = $('board'), ctx = canvas.getContext('2d', {alpha:false});
+const cache = document.createElement('canvas'), cacheCtx = cache.getContext('2d', {alpha:false});
+const engine = createEngine();
+const STRIKE_LIMIT = 9;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let game = null, busy = false, job = 0, worker = null, workerUrl = null, workerTimer = 0;
+let width = 0, height = 0, dpr = 1, cacheDirty = true, framePending = false;
+let effects = [], hoverId = -1, hintId = -1, demoTimer = 0, demoActive = false;
+let view = {zoom:1, cx:0, cy:0};
+const pointers = new Map();
+let gesture = null, overlayMode = 'loading';
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+const number = n => n.toLocaleString('en-CA');
 
-	const lakeMode = (rng() < 0.75);
-
-	const style = lakeMode ? {
-	  // invade the biggest void
-	  maxTurns: 220,
-	  minSeg: 2,
-	  maxSeg: 10,
-	  turnEvery: 2,
-	  turnChance: 0.88,
-	  allowStraightChance: 0.06,
-
-	  interiorBias: 0.85,
-	  boundaryBias: 0.00,
-
-	  minEdges: 2,
-	  startBias: "center",
-	  borderMargin: 0
-	} : {
-	  // stitch small pockets after the lake is reduced
-	  maxTurns: 160,
-	  minSeg: 2,
-	  maxSeg: 6,
-	  turnEvery: 2,
-	  turnChance: 0.92,
-	  allowStraightChance: 0.04,
-
-	  interiorBias: 0.00,
-	  boundaryBias: 0.70,
-
-	  minEdges: 2,
-	  startBias: "any",
-	  borderMargin: 0
-	};
-
-
-    const verts = growArrowVerticesInFreeSpace(rng, N, style, staticOcc, start);
-    if (!verts) { gapFails++; continue; }
-
-    const arrow = buildArrowFromVertices(N, verts);
-    if (!arrow) { gapFails++; continue; }
-    if (arrow.chain.length < 5) { gapFails++; continue; }
-    if (violatesSelfAim(N, arrow)) { gapFails++; continue; }
-
-    // Important: solvable given current occupancy
-    const sim = simulateSnakeExit(N, staticOcc, arrow, N + arrow.chain.length + 80);
-    if (!sim.ok) { gapFails++; continue; }
-
-    occupyStatic(staticOcc, arrow, 1);
-    arrows.push(arrow); // append (preserves reverse-order solvability)
-    gapFails = 0;
-  }
+function setStatus(text, error = false) {
+	$('status').textContent = text;
+	$('status').classList.toggle('error', error);
+}
+function transform() {
+	const N = game ? game.N : 70;
+	const padding = width < 620 || height < 330 ? 32 : 48;
+	const fit = Math.max(0.1, (Math.min(width, height) - 2*padding) / (N-1));
+	const cell = fit * view.zoom;
+	return {fit, cell, ox:width/2-view.cx*cell, oy:height/2-view.cy*cell};
+}
+function requestDraw(dirty = false) {
+	if (dirty) cacheDirty = true;
+	if (!framePending) { framePending = true; requestAnimationFrame(draw); }
+}
+function cleanupWorker() {
+	clearTimeout(workerTimer);
+	workerTimer = 0;
+	if (worker) worker.terminate();
+	worker = null;
+	if (workerUrl) URL.revokeObjectURL(workerUrl);
+	workerUrl = null;
+}
+function setOverlay(mode, message = '') {
+	overlayMode=mode;
+	const visible = mode !== 'none';
+	$('overlay').hidden = !visible;
+	$('spinner').hidden = mode !== 'loading';
+	$('overlayActions').hidden = mode === 'loading';
+	$('overlayUndo').hidden = mode !== 'lost';
+	if (mode === 'loading') {
+		$('overlayTitle').textContent = 'Making a puzzle.';
+		$('overlayText').textContent = 'Filling every dot and checking the way out.';
+	} else if (mode === 'won') {
+		$('overlayTitle').textContent = 'A clean slate.';
+		$('overlayText').textContent = `${number(game.arrows.length)} arrows cleared. ${game.strikes === 0 ? 'Not a single mistake.' : game.strikes + ' mistake' + (game.strikes === 1 ? '' : 's') + '.'}`;
+	} else if (mode === 'lost') {
+		$('overlayTitle').textContent = 'Out of attempts.';
+		$('overlayText').textContent = 'Replay the same puzzle, try a new one, or undo your last mistake.';
+	} else if (mode === 'error') {
+		$('overlayTitle').textContent = 'Could not build this puzzle.';
+		$('overlayText').textContent = message + ' Try loading the seed again.';
+	}
+}
+function updateUI() {
+	$('remainingText').textContent = game && !busy ? number(game.remaining) : '\u2013';
+	$('strikesText').textContent = game && !busy ? game.strikes : 0;
+	$('strikesText').style.color = game && game.strikes ? '#bb3e3e' : '';
+	$('coverageText').textContent = game && !busy ? '100%' : '\u2013';
+	$('coverageText').parentElement.title = game ? `Initial coverage: ${number(game.N*game.N)} of ${number(game.N*game.N)} dots, with no overlaps.` : '';
+	$('zoomText').textContent = Math.round(view.zoom*100) + '%';
+	const ready = !!game && !busy;
+	$('hintBtn').disabled = !ready || !game.remaining || game.strikes >= STRIKE_LIMIT;
+	$('undoBtn').disabled = !ready || !game.history.length;
+	$('replayBtn').disabled = !ready;
+	$('demoBtn').disabled = !ready || !game.remaining || game.strikes >= STRIKE_LIMIT;
+	$('demoBtn').setAttribute('aria-pressed', String(demoActive));
+	$('demoBtn').title = demoActive ? 'Stop auto-solve' : 'Watch a verified solution; press again to stop';
+	$('demoBtn').querySelector('.optional-label').textContent = demoActive ? 'Stop' : 'Auto-solve';
+	const percent = ready ? 100 * (1-game.remaining/game.arrows.length) : 0;
+	$('progressFill').style.width = percent+'%';
+	$('progressFill').parentElement.setAttribute('aria-valuenow', String(Math.round(percent)));
 }
 
-// Build a list of "frontier" empty dots: empty and startable, adjacent to occupied stuff.
-function occupiedNeighborCount(N, staticOcc, x, y){
-  let s = 0;
-  if (x > 0   && staticOcc.occD[dId(N, x-1, y)]) s++;
-  if (x < N-1 && staticOcc.occD[dId(N, x+1, y)]) s++;
-  if (y > 0   && staticOcc.occD[dId(N, x, y-1)]) s++;
-  if (y < N-1 && staticOcc.occD[dId(N, x, y+1)]) s++;
-  return s; // 0..4, *no border counting*
+// All paths are immutable. Only alive flags, ownership, and dependency counts change.
+function compileLevel(level, elapsed) {
+	const N = level.N, owner = new Int32Array(N*N).fill(-1), cellIndex = new Int32Array(N*N);
+	const arrows = level.arrows.map((source, id) => {
+		const cells = source.cells.slice(), head = cells[0], next = cells[1];
+		const hx = head%N, hy = Math.floor(head/N), dx = hx-next%N, dy = hy-Math.floor(next/N);
+		let minX=N, minY=N, maxX=0, maxY=0;
+		for (let k=0; k<cells.length; k++) {
+			const c=cells[k], x=c%N, y=Math.floor(c/N);
+			owner[c]=id; cellIndex[c]=k;
+			minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+		}
+		const tailFirst=cells.slice().reverse(), points=[];
+		for (let k=0; k<tailFirst.length; k++) {
+			if (k===0 || k===tailFirst.length-1 || tailFirst[k]-tailFirst[k-1] !== tailFirst[k+1]-tailFirst[k]) {
+				points.push({x:tailFirst[k]%N, y:Math.floor(tailFirst[k]/N), d:k});
+			}
+		}
+		const a={id,cells,hx,hy,dx,dy,points,length:cells.length-1,minX,minY,maxX,maxY,alive:true,animating:false};
+		const geometry=arrowGeometry(a,0);
+		a.strokePath=geometry.body; a.headPath=geometry.head;
+		return a;
+	});
+	const dependencies=arrows.map(a => {
+		const ids=new Set();
+		for (let x=a.hx+a.dx,y=a.hy+a.dy; x>=0&&x<N&&y>=0&&y<N; x+=a.dx,y+=a.dy) {
+			const id=owner[y*N+x];
+			if (id===a.id) throw Error('A path points into itself.');
+			if (id>=0) ids.add(id);
+		}
+		return [...ids];
+	});
+	const dependents=arrows.map(()=>[]);
+	dependencies.forEach((ids,id)=>ids.forEach(blocker=>dependents[blocker].push(id)));
+	const counts=Int32Array.from(dependencies,a=>a.length), available=new Set();
+	counts.forEach((n,id)=>{ if(n===0) available.add(id); });
+	return {N,seed:level.seed,arrows,owner,cellIndex,dependencies,dependents,counts,available,
+		solution:level.solution.slice(),remaining:arrows.length,strikes:0,history:[],ms:elapsed};
+}
+function loadPuzzle(N, seed) {
+	stopDemo(); cleanupWorker(); clearEffects();
+	const thisJob=++job, started=performance.now();
+	busy=true; hoverId=-1; hintId=-1; gesture=null; pointers.clear();
+	$('sizeInput').value=N; $('seedInput').value=seed;
+	$('boardLabel').textContent=`${N} \u00d7 ${N}`;
+	$('verifiedLabel').textContent='CHECKING THE FULL GRID';
+	setOverlay('loading'); setStatus('Filling every dot and verifying a complete solution...'); updateUI();
+	requestDraw(true);
+	function fail(error) {
+		if(thisJob!==job) return;
+		cleanupWorker(); busy=false;
+		const message=String(error && error.message || error);
+		setOverlay('error', message); setStatus(message,true); updateUI();
+	}
+	function finish(level) {
+		if(thisJob!==job) return;
+		cleanupWorker();
+		try { game=compileLevel(level,0); } catch(error) { fail(error); return; }
+		game.ms=Math.round(performance.now()-started);
+		busy=false; effects=[]; hoverId=-1; hintId=-1;
+		view={zoom:1,cx:(N-1)/2,cy:(N-1)/2};
+		$('verifiedLabel').textContent='FULL COVERAGE \u00b7 VERIFIED SOLUTION';
+		$('verifiedLabel').title='Every dot belongs to exactly one path. Every step of a complete solution was independently checked.';
+		setOverlay('none'); updateUI();
+		setStatus(`Built in ${number(game.ms)} ms. ${number(N*N)} / ${number(N*N)} dots used. Drag to pan; scroll or pinch to zoom.`);
+		try { history.replaceState(null,'',`#n=${N}&seed=${seed}`); } catch (_) { /* file:// history is optional */ }
+		requestDraw(true);
+	}
+	let fallbackUsed=false;
+	function fallback() {
+		if(thisJob!==job || fallbackUsed) return;
+		fallbackUsed=true; cleanupWorker();
+		setTimeout(()=>{
+			if(thisJob!==job) return;
+			try { const level=engine.generate(N,seed); engine.validate(level); finish(level); }
+			catch(error) { fail(error); }
+		},20);
+	}
+	try {
+		const source='"use strict";\n'+createEngine.toString()+
+			'\nself.onmessage=function(e){try{const engine=createEngine();const l=engine.generate(e.data.N,e.data.seed);engine.validate(l);self.postMessage({level:l});}catch(error){self.postMessage({error:String(error.message||error)});}};';
+		workerUrl=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
+		worker=new Worker(workerUrl);
+		worker.onmessage=e=>{
+			if(thisJob!==job) return;
+			if(e.data.error) fail(e.data.error); else finish(e.data.level);
+		};
+		worker.onerror=e=>{ e.preventDefault(); fallback(); };
+		workerTimer=setTimeout(()=>fail('Generation took longer than expected.'),15000);
+		worker.postMessage({N,seed});
+	} catch(_) { fallback(); }
+}
+function readSettings() {
+	const N=Number($('sizeInput').value), seed=Number($('seedInput').value);
+	if(!$('sizeInput').value.trim() || !Number.isInteger(N) || N<8 || N>200) {
+		setStatus('Choose a whole-number grid size from 8 to 200.',true); $('sizeInput').focus(); return null;
+	}
+	if(!$('seedInput').value.trim() || !Number.isInteger(seed) || seed<0 || seed>4294967295) {
+		setStatus('Choose a whole-number seed from 0 to 4294967295.',true); $('seedInput').focus(); return null;
+	}
+	return {N,seed};
+}
+function newPuzzle() {
+	const N=Number($('sizeInput').value);
+	if(!$('sizeInput').value.trim() || !Number.isInteger(N) || N<8 || N>200) {
+		setStatus('Choose a whole-number grid size from 8 to 200.',true); $('sizeInput').focus(); return;
+	}
+	let seed;
+	if(globalThis.crypto && crypto.getRandomValues) seed=crypto.getRandomValues(new Uint32Array(1))[0];
+	else seed=Math.floor(Math.random()*4294967296);
+	loadPuzzle(N,seed);
 }
 
-function buildFrontier(N, staticOcc){
-  const out = [];
-  for (let y=0;y<N;y++){
-    for (let x=0;x<N;x++){
-      const id = dId(N,x,y);
-      if (staticOcc.occD[id]) continue;
-      if (!hasFreeNeighbor(N, staticOcc, x, y)) continue;
-
-      // CRITICAL: must touch existing occupancy (blob adjacency)
-      const adj = occupiedNeighborCount(N, staticOcc, x, y);
-      if (adj <= 0) continue;
-
-      // Keep the "stitchiness" score around (how trapped it is)
-      // (this can still treat borders as occupied if you like)
-      const sc = neighborOccScore(N, staticOcc, x, y);
-
-      out.push({ x, y, sc, adj });
-    }
-  }
-  return out;
+// Runtime legality is a single straight ray. No per-dot snake simulation or grid rebuilding.
+function firstBlocker(id) {
+	const a=game.arrows[id], N=game.N;
+	let distance=1;
+	for(let x=a.hx+a.dx,y=a.hy+a.dy; x>=0&&x<N&&y>=0&&y<N; x+=a.dx,y+=a.dy,distance++) {
+		const blocker=game.owner[y*N+x];
+		if(blocker>=0) return {id:blocker,x,y,distance};
+	}
+	return null;
+}
+function removeLogical(id) {
+	const a=game.arrows[id];
+	a.alive=false; game.remaining--; game.available.delete(id);
+	for(const c of a.cells) game.owner[c]=-1;
+	for(const dep of game.dependents[id]) if(--game.counts[dep]===0 && game.arrows[dep].alive) game.available.add(dep);
+}
+function restoreLogical(id) {
+	const a=game.arrows[id];
+	a.alive=true; game.remaining++;
+	for(const c of a.cells) game.owner[c]=id;
+	for(const dep of game.dependents[id]) { game.counts[dep]++; game.available.delete(dep); }
+	if(game.counts[id]===0) game.available.add(id);
+}
+function makeMove(id, automatic=false) {
+	if(!game || busy || game.strikes>=STRIKE_LIMIT || !game.remaining) return false;
+	const a=game.arrows[id];
+	if(!a || !a.alive || a.animating) return false;
+	if(!automatic) stopDemo();
+	hoverId=-1; hintId=-1;
+	const hit=firstBlocker(id), start=performance.now();
+	if(hit) {
+		game.strikes++; game.history.push({id,ok:false}); a.animating=true;
+		effects.push({type:'bump',id,start,total:Math.max(.1,hit.distance-.17),hit,
+			duration:reduceMotion?120:clamp(400+hit.distance*5,400,750)});
+		setStatus('Blocked. Clear the whole lane ahead of that arrow first.',true);
+	} else {
+		game.history.push({id,ok:true}); removeLogical(id);
+		const {cell,ox,oy}=transform();
+		const hx=ox+a.hx*cell,hy=oy+a.hy*cell;
+		const rayToScreen=a.dx===1?(width-hx)/cell:a.dx===-1?hx/cell:a.dy===1?(height-hy)/cell:hy/cell;
+		const total=a.length+Math.max(1,rayToScreen)+2;
+		effects.push({type:'exit',id,start,total,duration:reduceMotion?80:clamp(300+total*3,360,850)});
+		if(!game.remaining) { stopDemo(); setStatus('The last arrow is on its way out.'); }
+		else if(automatic) setStatus('Auto-solving. Press Stop or click an arrow to take over.');
+		else setStatus(`${number(game.arrows.length-game.remaining)} cleared. ${number(game.remaining)} to go.`);
+	}
+	updateUI(); requestDraw(true); return !hit;
+}
+function clearEffects() {
+	if(game) for(const a of game.arrows) a.animating=false;
+	effects=[];
+}
+function undo() {
+	if(!game || busy || !game.history.length) return;
+	stopDemo(); clearEffects(); hoverId=-1; hintId=-1;
+	const last=game.history.pop();
+	if(last.ok) restoreLogical(last.id); else game.strikes=Math.max(0,game.strikes-1);
+	setOverlay('none'); setStatus(last.ok?'Last arrow restored.':'Last mistake undone.'); updateUI(); requestDraw(true);
+}
+function replay() {
+	if(!game || busy) return;
+	stopDemo(); clearEffects(); hoverId=-1; hintId=-1;
+	game.remaining=game.arrows.length; game.strikes=0; game.history=[]; game.available.clear();
+	for(const a of game.arrows) {
+		a.alive=true;
+		for(const c of a.cells) game.owner[c]=a.id;
+		game.counts[a.id]=game.dependencies[a.id].length;
+		if(game.counts[a.id]===0) game.available.add(a.id);
+	}
+	$('sizeInput').value=game.N; $('seedInput').value=game.seed;
+	setOverlay('none'); fitView(); setStatus('Same grid, fresh start. Every legal move helps.'); updateUI(); requestDraw(true);
+}
+function bestAvailable(exclude=-1) {
+	let best=-1,score=-Infinity;
+	for(const id of game.available) {
+		if(game.arrows[id].animating || (id===exclude && game.available.size>1)) continue;
+		let s=game.arrows[id].cells.length*.015;
+		for(const dep of game.dependents[id]) if(game.arrows[dep].alive && game.counts[dep]===1) s+=2;
+		if(s>score) {best=id;score=s;}
+	}
+	return best;
+}
+function hint() {
+	if(!game || busy || game.strikes>=STRIKE_LIMIT || !game.remaining) return;
+	stopDemo(); hintId=bestAvailable(hintId); hoverId=-1;
+	if(hintId<0) {setStatus('Wait for the returning arrow, then try Hint again.');return;}
+	const a=game.arrows[hintId], t=transform(), hx=t.ox+a.hx*t.cell,hy=t.oy+a.hy*t.cell;
+	if(hx<30 || hx>width-30 || hy<30 || hy>height-30 || t.cell<7) {
+		if(t.cell<7) view.zoom=clamp(14/t.fit,.6,48);
+		view.cx=(a.minX+a.maxX)/2; view.cy=(a.minY+a.maxY)/2;
+		constrainView(); cacheDirty=true;
+	}
+	canvas.focus({preventScroll:true});
+	setStatus('The highlighted arrow has a clear exit. Tap it or press Enter.'); updateUI(); requestDraw();
+}
+function stopDemo() {
+	clearTimeout(demoTimer); demoTimer=0; demoActive=false;
+	if($('demoBtn')) { $('demoBtn').setAttribute('aria-pressed','false'); $('demoBtn').querySelector('.optional-label').textContent='Auto-solve'; }
+}
+function toggleDemo() {
+	if(demoActive) {stopDemo();setStatus('Auto-solve paused. The board is yours.');updateUI();return;}
+	if(!game || busy || !game.remaining || game.strikes>=STRIKE_LIMIT) return;
+	demoActive=true; hintId=-1;
+	function step() {
+		if(!demoActive || !game || busy) return;
+		const id=bestAvailable();
+		if(id>=0) makeMove(id,true);
+		if(demoActive && game.remaining) demoTimer=setTimeout(step,160);
+	}
+	updateUI(); step();
 }
 
-
-function manhattan(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
-
-// Pick a frontier point biased toward being near one of the seeds.
-// Also mildly biases toward deeper interior (higher borderDist) so we don't only paint edges.
-function pickFrontierNearSeeds(rng, N, frontier, seeds){
-  if (!frontier.length) return null;
-
-  const SAMP = Math.min(frontier.length, 160);
-  let best = null;
-  let bestScore = Infinity;
-
-  for (let i=0;i<SAMP;i++){
-    const p = frontier[(rng()*frontier.length)|0];
-
-    // distance to nearest seed (NOT a random seed)
-    let minDist = 1e9;
-    for (let s=0;s<seeds.length;s++){
-      const dx = Math.abs(p.x - seeds[s].x);
-      const dy = Math.abs(p.y - seeds[s].y);
-      const d = dx + dy;
-      if (d < minDist) minDist = d;
-    }
-
-    const bd = borderDist(N, p.x, p.y);   // interior preference
-    const stitch = (4 - p.sc);            // prefer higher sc a bit (lower stitch)
-
-    // Lower is better:
-    // - minDist small = near *some* seed (good)
-    // - stitch small = more "stitchy" (good)
-    // - bd large = interior (good)
-    const score = minDist * 1.0 + stitch * 0.8 - bd * 0.20 + rng()*0.25;
-
-    if (score < bestScore){
-      bestScore = score;
-      best = p;
-    }
-  }
-
-  return best ? {x:best.x, y:best.y} : null;
+// Arclength clipping moves just the head and tail continuously; corners do not wobble.
+function pointAt(a,t) {
+	if(t>=a.length) return {x:a.hx+a.dx*(t-a.length),y:a.hy+a.dy*(t-a.length)};
+	for(let i=1;i<a.points.length;i++) {
+		const b=a.points[i];
+		if(b.d>=t) {const p=a.points[i-1],f=(t-p.d)/(b.d-p.d);return {x:p.x+(b.x-p.x)*f,y:p.y+(b.y-p.y)*f};}
+	}
+	return {x:a.hx,y:a.hy};
 }
-// Pick a frontier point that is FAR from the current colony (exploration mode).
-// We maximize distance-to-nearest-seed (with a mild preference for interior).
-function pickFrontierFarFromSeeds(rng, N, frontier, seeds){
-  if (!frontier.length) return null;
-
-  const SAMP = Math.min(frontier.length, 256);
-  let best = null;
-  let bestScore = -Infinity;
-
-  for (let i=0;i<SAMP;i++){
-    const p = frontier[(rng()*frontier.length)|0];
-
-    // distance to nearest seed
-    let dmin = Infinity;
-    for (let s=0; s<seeds.length; s++){
-      const sd = Math.abs(p.x - seeds[s].x) + Math.abs(p.y - seeds[s].y);
-      if (sd < dmin) dmin = sd;
-    }
-
-    const bd = borderDist(N, p.x, p.y);   // higher is more interior
-    // score: prefer far-from-colony, slightly prefer interior, and a little randomness
-    const score = dmin * 1.0 + bd * 0.25 + rng() * 0.5;
-
-    if (score > bestScore){
-      bestScore = score;
-      best = p;
-    }
-  }
-
-  return best ? {x:best.x, y:best.y} : null;
+function arrowGeometry(a,advance) {
+	const start=pointAt(a,advance),endT=a.length+advance-.34,end=pointAt(a,endT);
+	const body=new Path2D(); body.moveTo(start.x,start.y);
+	for(const p of a.points) if(p.d>advance && p.d<endT) body.lineTo(p.x,p.y);
+	body.lineTo(end.x,end.y);
+	const x=a.hx+a.dx*advance,y=a.hy+a.dy*advance,len=.57,half=.235;
+	const head=new Path2D(); head.moveTo(x,y);
+	head.lineTo(x-a.dx*len-a.dy*half,y-a.dy*len+a.dx*half);
+	head.lineTo(x-a.dx*len+a.dy*half,y-a.dy*len-a.dx*half); head.closePath();
+	return {body,head};
 }
-
-
-/* ---------- Worker search loop (incremental hill-climb) ---------- */
-function runSearch(msg){
-  const myJob   = msg.jobId;
-  const N       = msg.N|0;
-  const seedBase= msg.seed|0;
-  const timeMs  = msg.timeMs|0;
-
-  const rng = mulberry32(seedBase);
-  const tEnd = performance.now() + Math.max(300, timeMs);
-
-  // Stage A: get an initial decent candidate fast
-
-let bestLevel = generateLevelBlobThenCrop(N, seedBase|0);
-if (!bestLevel || !bestLevel.arrows || bestLevel.arrows.length < 5){
-  self.postMessage({ type:"done", jobId: myJob, best: null });
-  return;
+function worldTransform(context,t) { context.setTransform(dpr*t.cell,0,0,dpr*t.cell,dpr*t.ox,dpr*t.oy); }
+function lineWidth(cell) { return clamp(cell*.125,.65,6)/cell; }
+function paintArrow(context,a,advance,color,t,halo=false,alpha=1) {
+	const geometry=advance===0?{body:a.strokePath,head:a.headPath}:arrowGeometry(a,advance);
+	context.save(); context.globalAlpha=alpha; context.lineJoin='round'; context.lineCap='round';
+	if(halo) {
+		context.strokeStyle='#ffffff'; context.fillStyle='#ffffff'; context.lineWidth=lineWidth(t.cell)+.14;
+		context.stroke(geometry.body); context.stroke(geometry.head); context.fill(geometry.head);
+	}
+	context.lineWidth=lineWidth(t.cell)*(halo?1.24:1);
+	context.strokeStyle=color; context.fillStyle=color;
+	context.stroke(geometry.body); context.fill(geometry.head); context.restore();
 }
-let bestScore = scoreLevel(bestLevel);
-self.postMessage({ type:"best", jobId: myJob, best: { score: bestScore, level: bestLevel, solution: null } });
-
-// DONE — no Stage B on cropped boards
-self.postMessage({ type:"done", jobId: myJob, best: { score: bestScore, level: bestLevel, solution: null } });
-
-}`;
-
-
-
-let _workerBlobUrl = null;
-
-function getWorkerUrl(){
-  if (_workerBlobUrl) return _workerBlobUrl;
-  const blob = new Blob([LEVEL_WORKER_SOURCE], { type: "text/javascript" });
-  _workerBlobUrl = URL.createObjectURL(blob);
-  return _workerBlobUrl;
+function buildCache(t) {
+	cacheCtx.setTransform(1,0,0,1,0,0); cacheCtx.fillStyle='#fff'; cacheCtx.fillRect(0,0,cache.width,cache.height);
+	if(!game) {cacheDirty=false;return;}
+	worldTransform(cacheCtx,t);
+	const N=game.N, left=(-t.ox)/t.cell,top=(-t.oy)/t.cell,right=(width-t.ox)/t.cell,bottom=(height-t.oy)/t.cell;
+	const r=clamp(t.cell*.045,.45,1.35)/t.cell;
+	let dots=new Path2D(),dotCount=0;
+	cacheCtx.fillStyle='#d8dcd4';
+	// Keep native canvas paths bounded. Very large Path2D objects can become
+	// disproportionately expensive in software-rendered / headless browsers.
+	for(let y=Math.max(0,Math.floor(top));y<=Math.min(N-1,Math.ceil(bottom));y++) {
+		for(let x=Math.max(0,Math.floor(left));x<=Math.min(N-1,Math.ceil(right));x++) {
+			dots.moveTo(x+r,y);dots.arc(x,y,r,0,Math.PI*2);
+			if(++dotCount===256) {cacheCtx.fill(dots);dots=new Path2D();dotCount=0;}
+		}
+	}
+	if(dotCount) cacheCtx.fill(dots);
+	let lines=new Path2D(),heads=new Path2D(),pathCount=0;
+	cacheCtx.strokeStyle='#242729';cacheCtx.fillStyle='#242729';
+	cacheCtx.lineWidth=lineWidth(t.cell);cacheCtx.lineJoin='round';cacheCtx.lineCap='round';
+	function flushPaths() {
+		cacheCtx.stroke(lines);cacheCtx.fill(heads);
+		lines=new Path2D();heads=new Path2D();pathCount=0;
+	}
+	for(const a of game.arrows) {
+		if(!a.alive || a.animating || a.maxX<left-1 || a.minX>right+1 || a.maxY<top-1 || a.minY>bottom+1) continue;
+		lines.addPath(a.strokePath);heads.addPath(a.headPath);
+		if(++pathCount===64) flushPaths();
+	}
+	if(pathCount) flushPaths();
+	cacheDirty=false;
 }
-
-/* ============================================================
-   Main thread: rendering + interaction + simulation for moves
-   Generation/solve/scoring lives in the worker source above.
-   ============================================================ */
-
-/* ---------- Grid helpers ---------- */
-function hId(N,x,y){ return y*(N-1)+x; }
-function vId(N,x,y){ return y*N+x; }
-function dId(N,x,y){ return y*N+x; }
-function hInBounds(N,x,y){ return x>=0 && y>=0 && x < N-1 && y < N; }
-function vInBounds(N,x,y){ return x>=0 && y>=0 && x < N   && y < N-1; }
-function dotInBounds(N,x,y){ return x>=0 && y>=0 && x < N && y < N; }
-
-const DIRS=[
-  {k:"U",dx:0,dy:-1},
-  {k:"D",dx:0,dy: 1},
-  {k:"L",dx:-1,dy:0},
-  {k:"R",dx: 1,dy:0},
-];
-function dirByKey(k){ return DIRS.find(d=>d.k===k) || DIRS[3]; }
-
-function edgeBetweenDots(N, ax,ay, bx,by){
-  if (ax===bx){
-    const x=ax, y=Math.min(ay,by);
-    if (!vInBounds(N,x,y)) return {t:null,id:null};
-    return {t:"V", id:vId(N,x,y)};
-  } else if (ay===by){
-    const y=ay, x=Math.min(ax,bx);
-    if (!hInBounds(N,x,y)) return {t:null,id:null};
-    return {t:"H", id:hId(N,x,y)};
-  }
-  return {t:null,id:null};
+function draw(now) {
+	framePending=false;
+	const t=transform();
+	let completed=false;
+	effects=effects.filter(effect=>{
+		if(now-effect.start<effect.duration) return true;
+		if(game && effect.type==='bump') game.arrows[effect.id].animating=false;
+		completed=true;return false;
+	});
+	if(completed) cacheDirty=true;
+	if(cacheDirty) buildCache(t);
+	ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(cache,0,0);
+	if(!game) return;
+	worldTransform(ctx,t);
+	if(hintId>=0 && game.arrows[hintId].alive && !game.arrows[hintId].animating) paintArrow(ctx,game.arrows[hintId],0,'#226bd1',t,true);
+	if(hoverId>=0 && hoverId!==hintId && game.arrows[hoverId].alive && !game.arrows[hoverId].animating) paintArrow(ctx,game.arrows[hoverId],0,'#000000',t,true);
+	for(const effect of effects) {
+		const p=clamp((now-effect.start)/effect.duration,0,1),a=game.arrows[effect.id];
+		if(effect.type==='exit') {
+			paintArrow(ctx,a,effect.total*p*p,'#242729',t,false,reduceMotion?1-p:1);
+		} else {
+			let k;
+			if(p<.44) k=1-Math.pow(1-p/.44,3);
+			else if(p<.53) k=1;
+			else {const q=(p-.53)/.47;k=1-q*q*(3-2*q);}
+			paintArrow(ctx,a,effect.total*k,'#bb3e3e',t,false,1);
+			if(p>.28 && p<.8) {
+				ctx.save();ctx.globalAlpha=.5*Math.sin((p-.28)/.52*Math.PI);ctx.strokeStyle='#bb3e3e';ctx.lineWidth=.08;
+				ctx.beginPath();ctx.arc(effect.hit.x,effect.hit.y,.28+.12*p,0,Math.PI*2);ctx.stroke();ctx.restore();
+			}
+		}
+	}
+	if(effects.length) requestDraw();
+	else if(!busy && overlayMode!=='error') {
+		if(game.remaining===0) {setOverlay('won');setStatus(`Solved. ${number(game.N*game.N)} dots untangled.`);}
+		else if(game.strikes>=STRIKE_LIMIT) {stopDemo();setOverlay('lost');}
+	}
 }
-function allOut(N, chain){
-  for (const p of chain) if (dotInBounds(N,p.x,p.y)) return false;
-  return true;
+function resize() {
+	const w=Math.max(1,$('stage').clientWidth),h=Math.max(1,$('stage').clientHeight),ratio=Math.min(window.devicePixelRatio||1,2.5);
+	if(w===width && h===height && ratio===dpr) return;
+	width=w;height=h;dpr=ratio;
+	canvas.width=cache.width=Math.round(width*dpr);canvas.height=cache.height=Math.round(height*dpr);
+	requestDraw(true);
 }
-/* ---------- Occupancy (for collision checking during moves) ---------- */
-function makeOcc(N){
-  return {
-    occH: new Uint8Array((N-1)*N),
-    occV: new Uint8Array(N*(N-1)),
-    occD: new Uint8Array(N*N),
-  };
+function constrainView() {
+	if(!game) return;
+	view.cx=clamp(view.cx,-game.N*.35,game.N*1.35);
+	view.cy=clamp(view.cy,-game.N*.35,game.N*1.35);
 }
-function occupyStatic(occ, arrow, val){
-  const EH = arrow.staticEdgesH || [];
-  const EV = arrow.staticEdgesV || [];
-  const ED = arrow.staticDots   || [];
-  for (let i=0;i<EH.length;i++) occ.occH[EH[i]] = val;
-  for (let i=0;i<EV.length;i++) occ.occV[EV[i]] = val;
-  for (let i=0;i<ED.length;i++) occ.occD[ED[i]] = val;
+function zoomAt(factor,sx=width/2,sy=height/2) {
+	if(!game) return;
+	const old=transform(),wx=(sx-old.ox)/old.cell,wy=(sy-old.oy)/old.cell;
+	view.zoom=clamp(view.zoom*factor,.6,48);
+	const cell=old.fit*view.zoom;
+	view.cx=wx-(sx-width/2)/cell;view.cy=wy-(sy-height/2)/cell;
+	constrainView();hoverId=-1;updateUI();requestDraw(true);
 }
-
-function simulateSnakeExit(N, staticOcc, arrow, maxSteps){
-  const dir=dirByKey(arrow.dir);
-  const chain = arrow.chain.map(p=>({x:p.x,y:p.y}));
-  const stepsLimit = maxSteps ?? (N + chain.length + 50);
-
-  const selfD = new Uint8Array(N*N);
-  const selfH = new Uint8Array((N-1)*N);
-  const selfV = new Uint8Array(N*(N-1));
-
-  for (let i=0;i<chain.length;i++){
-    const p=chain[i];
-    if (dotInBounds(N,p.x,p.y)) selfD[dId(N,p.x,p.y)]=1;
-    if (i>0){
-      const q=chain[i-1];
-      const e=edgeBetweenDots(N,q.x,q.y,p.x,p.y);
-      if (e.t==="H") selfH[e.id]=1;
-      if (e.t==="V") selfV[e.id]=1;
-    }
-  }
-
-  for (let step=0; step<stepsLimit; step++){
-    if (allOut(N, chain)) return {ok:true, steps:step, collision:null};
-
-    const t0=chain[0], t1=chain[1];
-    if (dotInBounds(N,t0.x,t0.y)) selfD[dId(N,t0.x,t0.y)]=0;
-    const te=edgeBetweenDots(N,t0.x,t0.y,t1.x,t1.y);
-    if (te.t==="H") selfH[te.id]=0;
-    if (te.t==="V") selfV[te.id]=0;
-
-    const head=chain[chain.length-1];
-    const nx=head.x+dir.dx, ny=head.y+dir.dy;
-
-    if (dotInBounds(N,nx,ny)){
-      const did=dId(N,nx,ny);
-      if (selfD[did]) return {ok:false, steps:step, collision:{kind:"self-dot", x:nx,y:ny}};
-      if (staticOcc.occD[did]) return {ok:false, steps:step, collision:{kind:"other-dot", x:nx,y:ny}};
-    }
-
-    const he=edgeBetweenDots(N, head.x,head.y, nx,ny);
-    if (he.t==="H"){
-      if (staticOcc.occH[he.id]) return {ok:false, steps:step, collision:{kind:"other-edge", edgeType:"H", edgeId:he.id}};
-      if (selfH[he.id])         return {ok:false, steps:step, collision:{kind:"self-edge",  edgeType:"H", edgeId:he.id}};
-    }
-    if (he.t==="V"){
-      if (staticOcc.occV[he.id]) return {ok:false, steps:step, collision:{kind:"other-edge", edgeType:"V", edgeId:he.id}};
-      if (selfV[he.id])         return {ok:false, steps:step, collision:{kind:"self-edge",  edgeType:"V", edgeId:he.id}};
-    }
-
-    chain.shift();
-    chain.push({x:nx,y:ny});
-    if (dotInBounds(N,nx,ny)) selfD[dId(N,nx,ny)]=1;
-    if (he.t==="H") selfH[he.id]=1;
-    if (he.t==="V") selfV[he.id]=1;
-  }
-
-  return {ok:false, steps:stepsLimit, collision:{kind:"timeout"}};
+function fitView() {
+	if(!game) return;
+	view={zoom:1,cx:(game.N-1)/2,cy:(game.N-1)/2};hoverId=-1;updateUI();requestDraw(true);
 }
-
-/* ---------- Canvas + Game state ---------- */
-const canvas=document.getElementById("c");
-const ctx=canvas.getContext("2d");
-let game=null;
-
-function clampInt(v,lo,hi){
-  if (!Number.isFinite(v)) v=lo;
-  v=Math.floor(v);
-  return Math.max(lo,Math.min(hi,v));
+function segmentDistance2(x,y,ax,ay,bx,by) {
+	const dx=bx-ax,dy=by-ay,den=dx*dx+dy*dy;
+	const p=den?clamp(((x-ax)*dx+(y-ay)*dy)/den,0,1):0;
+	return (x-ax-p*dx)**2+(y-ay-p*dy)**2;
 }
-function setStatus(s){ document.getElementById("statusTxt").textContent = s; }
-
-function updateHud(){
-  document.getElementById("strikeTxt").textContent=String(game?.strikes ?? 0);
-  const remain=game ? game.arrows.filter(a=>a.alive).length : 0;
-  document.getElementById("remainTxt").textContent=String(remain);
+// An ownership index limits hit testing to a 3x3 neighborhood, not every path.
+function pickArrow(sx,sy) {
+	if(!game || busy || game.strikes>=STRIKE_LIMIT) return -1;
+	const t=transform(),x=(sx-t.ox)/t.cell,y=(sy-t.oy)/t.cell,N=game.N;
+	if(x<-.5 || y<-.5 || x>N-.5 || y>N-.5) return -1;
+	const radius=clamp(7/t.cell,.20,.44),ix=Math.round(x),iy=Math.round(y);
+	let best=-1,bestD=radius*radius;
+	for(let gy=Math.max(0,iy-1);gy<=Math.min(N-1,iy+1);gy++) {
+		for(let gx=Math.max(0,ix-1);gx<=Math.min(N-1,ix+1);gx++) {
+			const c=gy*N+gx,id=game.owner[c];
+			if(id<0 || game.arrows[id].animating) continue;
+			const a=game.arrows[id],k=game.cellIndex[c];
+			for(const j of [k-1,k+1]) {
+				if(j<0 || j>=a.cells.length) continue;
+				const b=a.cells[j],d=segmentDistance2(x,y,gx,gy,b%N,Math.floor(b/N));
+				if(d<bestD) {bestD=d;best=id;}
+			}
+		}
+	}
+	return best;
 }
-
-/* ---------- Worker pool (Blob workers) ---------- */
-let pool = [];
-let currentJob = 0;
-
-function makePool(){
-  // keep it sane on mobile
-  const hc = navigator.hardwareConcurrency || 4;
-  const threads = Math.max(1, Math.min(6, hc - 1));
-  const url = getWorkerUrl();
-  pool = Array.from({ length: threads }, () => new Worker(url)); // classic by default
+function eventPoint(e) {const r=canvas.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
+function beginPinch() {
+	const [a,b]=[...pointers.values()],mx=(a.x+b.x)/2,my=(a.y+b.y)/2,t=transform();
+	gesture={mode:'pinch',distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),zoom:view.zoom,wx:(mx-t.ox)/t.cell,wy:(my-t.oy)/t.cell};
 }
-
-function stopPool(jobId){
-  for (const w of pool){
-    try { w.postMessage({ type:"stop", jobId }); } catch {}
-  }
-}
-
-function normalizeArrowFromWorker(a, id){
-  const vertices = (a.vertices || []).map(p => ({x:p.x, y:p.y}));
-  const chain    = (a.chain    || []).map(p => ({x:p.x, y:p.y}));
-
-  let staticDots = a.staticDots;
-  let staticEdgesH = a.staticEdgesH;
-  let staticEdgesV = a.staticEdgesV;
-
-  if (!staticDots || !staticEdgesH || !staticEdgesV){
-    const dots = [];
-    const eh = [];
-    const ev = [];
-    for (let i=0;i<chain.length;i++){
-      const p=chain[i];
-      dots.push(dId(game.N, p.x, p.y));
-      if (i>0){
-        const q=chain[i-1];
-        const e=edgeBetweenDots(game.N,q.x,q.y,p.x,p.y);
-        if (e.t==="H") eh.push(e.id);
-        if (e.t==="V") ev.push(e.id);
-      }
-    }
-    staticDots = staticDots || dots;
-    staticEdgesH = staticEdgesH || eh;
-    staticEdgesV = staticEdgesV || ev;
-  }
-
-  return {
-    id,
-    vertices,
-    chain,
-    staticDots,
-    staticEdgesH,
-    staticEdgesV,
-    dir: a.dir || "R",
-    blocked: false,
-    alive: true,
-  };
-}
-
-function setLevelFromWorker(level){
-  const N = level.N;
-  game = {
-    N,
-    arrows: level.arrows.map((a,i)=>normalizeArrowFromWorker(a,i)),
-    strikes: 0,
-    anim: null,
-    debugCollision: null,
-    padding: 24,
-  };
-  updateHud();
-  draw();
-}
-
-function startSearch({N, seed}){
-  if (!pool.length) makePool();
-
-  currentJob++;
-  const jobId = currentJob;
-  stopPool(jobId);
-
-  setStatus("Generating…");
-  game = { N, arrows: [], strikes: 0, anim: null, debugCollision: null, padding: 24 };
-  updateHud();
-  draw();
-
-  let bestSoFar = null;
-  let lastPreviewAt = 0;
-  let doneCount = 0;
-
-  // give it more time; density is a hard optimization problem
-  const timeMs = (navigator.userAgent.includes("Android") || navigator.userAgent.includes("iPhone")) ? 2500 : 5000;
-
-
-  pool.forEach((w, i) => {
-    w.onmessage = (e) => {
-      const msg = e.data;
-      if (!msg || msg.jobId !== jobId) return;
-
-      if (msg.type === "best" && msg.best && msg.best.level){
-        if (!bestSoFar || msg.best.score > bestSoFar.score){
-          bestSoFar = msg.best;
-          const now = performance.now();
-		  if (now - lastPreviewAt > 150) {
-		    lastPreviewAt = now;
-		    setStatus("Searching…");
-		    setLevelFromWorker(bestSoFar.level);
-		  }
-        }
-      }
-
-      if (msg.type === "done"){
-        doneCount++;
-        if (msg.best && msg.best.level){
-          if (!bestSoFar || msg.best.score > bestSoFar.score) bestSoFar = msg.best;
-        }
-        if (doneCount === pool.length){
-          if (bestSoFar && bestSoFar.level){
-            setStatus("Ready");
-            setLevelFromWorker(bestSoFar.level);
-          } else {
-            setStatus("Failed");
-            alert("Generation failed. Try a different seed or lower N.");
-          }
-          stopPool(jobId);
-        }
-      }
-    };
-
-    w.postMessage({
-      type: "start",
-      jobId,
-      N,
-      seed: (seed + i * 1013) | 0,
-      timeMs
-    });
-  });
-}
-
-/* ---------- Gameplay: moving + bounce ---------- */
-function rebuildOccWithoutArrow(N, arrows, skipId){
-  const occ=makeOcc(N);
-  for (const a of arrows){
-    if (!a.alive) continue;
-    if (a.id===skipId) continue;
-    occupyStatic(occ,a,1);
-  }
-  return occ;
-}
-
-function startMove(id){
-  const a = game.arrows[id];
-  if (!a || !a.alive) return;
-
-  game.debugCollision = null;
-
-  const occWithoutSelf = rebuildOccWithoutArrow(game.N, game.arrows, id);
-  const sim = simulateSnakeExit(game.N, occWithoutSelf, a, game.N + a.chain.length + 80);
-
-  game.anim = {
-    arrowId: id,
-    dir: dirByKey(a.dir),
-
-    // forward motion timing
-    startedAt: performance.now(),
-    speedDotsPerSec: 30,
-    alpha: 0,
-    stepCount: 0,
-
-    // the chain we animate (mutable)
-    chain: a.chain.map(p => ({x:p.x, y:p.y})),
-
-    // prev/next snapshots for interpolation
-    prevChain: a.chain.map(p => ({x:p.x, y:p.y})),
-    nextChain: a.chain.map(p => ({x:p.x, y:p.y})),
-
-    // collision info
-    willCollide: !sim.ok,
-    collideAtStep: sim.ok ? null : sim.steps,
-    collision: sim.ok ? null : sim.collision,
-
-    // phase control
-    phase: "forward",
-
-    // HISTORY: one record per forward step so we can undo perfectly
-    history: [], // each: { tail:{x,y}, head:{x,y} }
-
-    // bounce settings
-    bounceSpeedMul: 1.3,
-    bounceStartedAt: null,
-    bounceStepsDone: 0,
-
-    // snapback target: how many steps to undo (we'll compute at collision)
-    bounceTargetSteps: 0,
-
-    // original chain for snap-back (after bounce)
-    originChain: a.chain.map(p => ({x:p.x, y:p.y})),
-  };
-
-  requestAnimationFrame(tick);
-}
-
-function interpChainForDraw(){
-  const anim = game.anim;
-  if (!anim) return null;
-
-  // Nokia-snake rule:
-  // keep every corner perfectly 90° by snapping all intermediate vertices to integer grid.
-  // Only the head moves fractionally along its current direction (and optionally the tail).
-  const a = Math.max(0, Math.min(1, anim.alpha || 0));
-
-  const chain = anim.chain;           // integer grid positions (after last committed step)
-  const out = chain.map(p => ({ x: p.x, y: p.y }));
-
-  const n = out.length;
-  if (n < 2) return out;
-
-  // Move head fractionally forward along direction.
-  // We do NOT move other points, so corners stay rigid.
-  const dir = anim.dir;
-  out[n - 1] = {
-    x: out[n - 1].x + dir.dx * a,
-    y: out[n - 1].y + dir.dy * a
-  };
-
-  // Optional: move tail fractionally forward too (so the whole snake "slides").
-  // This still keeps corners crisp because the tail segment is straight.
-  // If you want the tail to stay perfectly snapped, set this to false.
-  const SLIDE_TAIL = true;
-
-  if (SLIDE_TAIL && n >= 2){
-    // tail moves toward second point
-    const t0 = out[0];
-    const t1 = out[1];
-    const dx = Math.sign(t1.x - t0.x);
-    const dy = Math.sign(t1.y - t0.y);
-    out[0] = { x: t0.x + dx * a, y: t0.y + dy * a };
-  }
-
-  return out;
-}
-
-
-function tick(now){
-  if (!game || !game.anim) return;
-  const anim = game.anim;
-  const arrow = game.arrows[anim.arrowId];
-  if (!arrow) { game.anim = null; return; }
-
-  // -------------------------
-  // FORWARD
-  // -------------------------
-  if (anim.phase === "forward"){
-    const dt = (now - anim.startedAt) / 1000;
-    const pos = dt * anim.speedDotsPerSec;
-    const targetStep = Math.floor(pos);
-    anim.alpha = pos - targetStep;
-
-    while (anim.stepCount < targetStep){
-      // If we are about to collide, trigger bounce WITHOUT doing the colliding step.
-      if (anim.willCollide && anim.stepCount >= anim.collideAtStep){
-        // turn red immediately
-        arrow.blocked = true;
-        game.debugCollision = anim.collision;
-
-        game.strikes++;
-        updateHud();
-        if (game.strikes >= strikesAllowed) alert("Game over ("+strikesAllowed+" strikes).");
-
-        // Decide how far to bounce back:
-        // "reverse to just before the last corner" = undo the last straight run - 1.
-        // We can compute last straight run from the CURRENT chain.
-        const ch = anim.chain;
-        const n = ch.length;
-
-        let runEdges = 1;
-        for (let i = n - 1; i >= 2; i--){
-          const dx1 = ch[i].x - ch[i-1].x;
-          const dy1 = ch[i].y - ch[i-1].y;
-          const dx0 = ch[i-1].x - ch[i-2].x;
-          const dy0 = ch[i-1].y - ch[i-2].y;
-          if (dx1 === dx0 && dy1 === dy0) runEdges++;
-          else break;
-        }
-
-        // Undo almost to the corner, clamp to keep it snappy.
-        // Also cannot undo more than we actually moved.
-        const want = Math.max(1, Math.min(runEdges - 1, 10));
-        anim.bounceTargetSteps = Math.min(want, anim.history.length);
-
-        anim.phase = "bounce";
-        anim.bounceStartedAt = now;
-        anim.bounceStepsDone = 0;
-
-        // Set interpolation to "no movement" at the moment of collision
-        anim.prevChain = anim.chain.map(p => ({x:p.x, y:p.y}));
-        anim.nextChain = anim.chain.map(p => ({x:p.x, y:p.y}));
-        anim.alpha = 0;
-
-        draw();
-        requestAnimationFrame(tick);
-        return;
-      }
-
-      // Normal forward step:
-      // Save snapshots for interpolation
-      anim.prevChain = anim.chain.map(p => ({x:p.x, y:p.y}));
-
-      // Record history to allow perfect undo
-      const tail = anim.chain[0];
-      const head = anim.chain[anim.chain.length - 1];
-      const newHead = { x: head.x + anim.dir.dx, y: head.y + anim.dir.dy };
-      anim.history.push({ tail: {x:tail.x, y:tail.y}, head: {x:newHead.x, y:newHead.y} });
-
-      // Apply snake step
-      anim.chain.shift();
-      anim.chain.push(newHead);
-
-      anim.nextChain = anim.chain.map(p => ({x:p.x, y:p.y}));
-
-      anim.stepCount++;
-    }
-
-    // Win condition
-    if (!anim.willCollide && allOut(game.N, anim.chain)){
-      arrow.alive = false;
-      game.anim = null;
-      updateHud();
-      draw();
-      if (game.arrows.every(x => !x.alive)) alert("Cleared! 🎯");
-      return;
-    }
-
-    draw();
-    requestAnimationFrame(tick);
-    return;
-  }
-
-  // -------------------------
-  // BOUNCE (perfect undo)
-  // -------------------------
-  if (anim.phase === "bounce"){
-    if (anim.bounceStartedAt == null) anim.bounceStartedAt = now;
-
-    const bounceDps = anim.speedDotsPerSec * (anim.bounceSpeedMul || 1.3);
-    const dt = (now - anim.bounceStartedAt) / 1000;
-    const targetUndo = Math.min(anim.bounceTargetSteps, Math.floor(dt * bounceDps));
-
-    while (anim.bounceStepsDone < targetUndo){
-      if (anim.history.length === 0) break;
-
-      anim.prevChain = anim.chain.map(p => ({x:p.x, y:p.y}));
-
-      const rec = anim.history.pop(); // last forward step
-      // Undo: remove head, re-add tail
-      anim.chain.pop();
-      anim.chain.unshift({ x: rec.tail.x, y: rec.tail.y });
-
-      anim.nextChain = anim.chain.map(p => ({x:p.x, y:p.y}));
-
-      anim.bounceStepsDone++;
-      anim.stepCount = Math.max(0, anim.stepCount - 1);
-    }
-
-    // Interpolate within the current undo step
-    // (Use fractional time to keep it smooth)
-    const fracPos = (dt * bounceDps) - targetUndo;
-    anim.alpha = Math.max(0, Math.min(1, fracPos));
-
-    draw();
-
-    if (anim.bounceStepsDone >= anim.bounceTargetSteps || anim.history.length === 0){
-      // Snap back to original placement (still red)
-      arrow.chain = anim.originChain.map(p => ({x:p.x, y:p.y}));
-      game.anim = null;
-      draw();
-      return;
-    }
-
-    requestAnimationFrame(tick);
-    return;
-  }
-}
-
-
-/* ---------- Hit testing (click anywhere) ---------- */
-function distPointToSegment2(px,py,x0,y0,x1,y1){
-  const vx=x1-x0, vy=y1-y0;
-  const wx=px-x0, wy=py-y0;
-  const c1=vx*wx+vy*wy;
-  if (c1<=0) return (px-x0)**2+(py-y0)**2;
-  const c2=vx*vx+vy*vy;
-  if (c2<=c1) return (px-x1)**2+(py-y1)**2;
-  const t=c1/c2;
-  const bx=x0+t*vx, by=y0+t*vy;
-  return (px-bx)**2+(py-by)**2;
-}
-function pointInTri(px,py, ax,ay, bx,by, cx,cy){
-  const v0x=cx-ax, v0y=cy-ay;
-  const v1x=bx-ax, v1y=by-ay;
-  const v2x=px-ax, v2y=py-ay;
-  const dot00=v0x*v0x+v0y*v0y;
-  const dot01=v0x*v1x+v0y*v1y;
-  const dot02=v0x*v2x+v0y*v2y;
-  const dot11=v1x*v1x+v1y*v1y;
-  const dot12=v1x*v2x+v1y*v2y;
-  const invDen = 1 / (dot00*dot11 - dot01*dot01);
-  const u = (dot11*dot02 - dot01*dot12) * invDen;
-  const v = (dot00*dot12 - dot01*dot02) * invDen;
-  return (u>=0) && (v>=0) && (u+v<=1);
-}
-function pickArrowAt(px,py){
-  if (!game) return null;
-
-  const {N} = game;
-
-  // Match draw(): compute fit cell and origin
-  const padPx = 18;
-  const size = Math.min(canvas.width, canvas.height);
-  const fitCell = (size - 2*padPx) / (N - 1);
-  const cell = fitCell * view.zoom;
-
-  const boardW = (N - 1) * cell;
-  const boardH = (N - 1) * cell;
-
-  const originX = (canvas.width  - boardW) * 0.5 - view.panX * cell;
-  const originY = (canvas.height - boardH) * 0.5 - view.panY * cell;
-
-  function sx(x){ return originX + x * cell; }
-  function sy(y){ return originY + y * cell; }
-
-  const lineW = Math.max(2.0, cell * 0.28);
-  const thresh = Math.max(10, lineW * 2.0);
-
-  let best={id:-1,d2:Infinity};
-
-  for (const a of game.arrows){
-    if (!a.alive) continue;
-
-    const chain=a.chain;
-    for (let i=1;i<chain.length;i++){
-      const p0=chain[i-1], p1=chain[i];
-      const x0=sx(p0.x), y0=sy(p0.y);
-      const x1=sx(p1.x), y1=sy(p1.y);
-      const d2=distPointToSegment2(px,py,x0,y0,x1,y1);
-      if (d2<best.d2){ best={id:a.id,d2}; }
-    }
-
-    // head triangle
-    const v=a.vertices;
-    const n=v.length;
-    if (n >= 2){
-      const pPrev=v[n-2], pTip=v[n-1];
-      const ux=Math.sign(pTip.x-pPrev.x), uy=Math.sign(pTip.y-pPrev.y);
-      const tipX=sx(pTip.x), tipY=sy(pTip.y);
-      const headLen=Math.max(9,cell*0.9);
-      const headW=headLen*0.55;
-      const pxn=-uy, pyn=ux;
-      const ax=tipX, ay=tipY;
-      const bx=tipX-ux*headLen+pxn*headW;
-      const by=tipY-uy*headLen+pyn*headW;
-      const cx=tipX-ux*headLen-pxn*headW;
-      const cy=tipY-uy*headLen-pyn*headW;
-      if (pointInTri(px,py, ax,ay,bx,by,cx,cy)) return a.id;
-    }
-  }
-
-  if (best.id!==-1 && best.d2<=thresh*thresh) return best.id;
-  return null;
-}
-
-
-function tryClickArrow(id){
-  if (!game || game.anim) return;
-  const a=game.arrows[id];
-  if (!a || !a.alive) return;
-  startMove(id);
-}
-
-/* ---------- Rendering ---------- */
-function drawArrowHead(ctx, tipX, tipY, ux, uy, headLen, headW, color){
-  const px=-uy, py=ux;
-  const bx=tipX-ux*headLen+px*headW;
-  const by=tipY-uy*headLen+py*headW;
-  const cx=tipX-ux*headLen-px*headW;
-  const cy=tipY-uy*headLen-py*headW;
-  ctx.fillStyle=color;
-  ctx.beginPath();
-  ctx.moveTo(tipX,tipY);
-  ctx.lineTo(bx,by);
-  ctx.lineTo(cx,cy);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function draw(){
-  if (!game) return;
-
-  const {N} = game;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // Compute fit scale: pixels per grid unit
-  const padPx = 18; // small pixel margin around board
-  const size = Math.min(canvas.width, canvas.height);
-  const fitCell = (size - 2*padPx) / (N - 1);
-
-  // User zoom multiplies fit
-  const cell = fitCell * view.zoom;
-
-  // World half-extent around the board center in grid units
-  const boardW = (N - 1) * cell;
-  const boardH = (N - 1) * cell;
-
-  // Board origin (top-left) in pixels, centered, then panned
-  // Pan is stored in world grid units, convert to pixels by * cell
-  const originX = (canvas.width  - boardW) * 0.5 - view.panX * cell;
-  const originY = (canvas.height - boardH) * 0.5 - view.panY * cell;
-
-  // Helper: world->screen
-  function sx(x){ return originX + x * cell; }
-  function sy(y){ return originY + y * cell; }
-
-  // dots (density throttled)
-  ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = "#0b1530";
-  const step = N > 140 ? 2 : 1;
-  for (let y=0;y<N;y+=step){
-    for (let x=0;x<N;x+=step){
-      const px = sx(x), py = sy(y);
-      ctx.beginPath();
-      ctx.arc(px, py, 1.0, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-  ctx.restore();
-
-  // arrows
-
-  for (const a of game.arrows){
-    if (!a.alive) continue;
-
-    const isMoving = game.anim && game.anim.arrowId === a.id;
-    const color = a.blocked ? "#b33" : "#0b1530";
-
-    ctx.lineWidth   = Math.max(2.0, cell * 0.28);
-    ctx.lineJoin    = "miter";
-    ctx.miterLimit  = 10;
-    ctx.lineCap     = "butt";
-    ctx.strokeStyle = color;
-
-    const chain = isMoving ? interpChainForDraw() : a.chain;
-    const n = chain.length;
-    if (n < 2) continue;
-
-    const p0 = chain[n-2], p1 = chain[n-1];
-    const ux = Math.sign(p1.x - p0.x), uy = Math.sign(p1.y - p0.y);
-
-    const tipX = sx(p1.x), tipY = sy(p1.y);
-    const headLen = Math.max(9, cell * 0.9);
-    const headW   = headLen * 0.55;
-    const baseX = tipX - ux * headLen;
-    const baseY = tipY - uy * headLen;
-
-    // draw each segment separately
-    for (let i=1;i<n;i++){
-      const q0 = chain[i-1];
-      const q1 = chain[i];
-
-      let x0 = sx(q0.x), y0 = sy(q0.y);
-      let x1 = sx(q1.x), y1 = sy(q1.y);
-
-      // shorten last segment to stop at head base
-      if (i === n-1){
-        x1 = baseX;
-        y1 = baseY;
-      }
-
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-    }
-
-    drawArrowHead(ctx, tipX, tipY, ux, uy, headLen, headW, color);
-  }
-
-}
-
-
-/* ---------- Input ---------- */
-canvas.addEventListener("pointerdown",(e)=>{
-  if (!game) return;
-
-  const rect=canvas.getBoundingClientRect();
-  const x=(e.clientX-rect.left)*(canvas.width/rect.width);
-  const y=(e.clientY-rect.top)*(canvas.height/rect.height);
-
-  // If SHIFT is held, pan always. Otherwise: click arrow, else pan.
-  const id = (game.arrows.length === 0 || game.anim) ? null : pickArrowAt(x,y);
-
-  if (!e.shiftKey && id!=null){
-    tryClickArrow(id);
-    return;
-  }
-
-  // start panning
-  view.isPanning = true;
-  canvas.setPointerCapture(e.pointerId);
-
-  view.panStart = {
-    x0: x,
-    y0: y,
-    panX0: view.panX,
-    panY0: view.panY
-  };
+canvas.addEventListener('pointerdown',e=>{
+	if(!game || busy) return;
+	e.preventDefault();canvas.focus({preventScroll:true});
+	const p=eventPoint(e);pointers.set(e.pointerId,p);
+	try {canvas.setPointerCapture(e.pointerId);} catch(_) {}
+	hoverId=-1;
+	if(pointers.size===1) gesture={mode:'pending',x:p.x,y:p.y,cx:view.cx,cy:view.cy,cell:transform().cell,forcePan:e.shiftKey||e.button!==0};
+	else if(pointers.size===2) beginPinch();
+	requestDraw();
 });
-
-canvas.addEventListener("pointermove",(e)=>{
-  if (!view.isPanning || !view.panStart || !game) return;
-
-  const rect=canvas.getBoundingClientRect();
-  const x=(e.clientX-rect.left)*(canvas.width/rect.width);
-  const y=(e.clientY-rect.top)*(canvas.height/rect.height);
-
-  const {N} = game;
-  const padPx = 18;
-  const size = Math.min(canvas.width, canvas.height);
-  const fitCell = (size - 2*padPx) / (N - 1);
-  const cell = fitCell * view.zoom;
-
-  const dxPx = x - view.panStart.x0;
-  const dyPx = y - view.panStart.y0;
-
-  // convert pixels -> world grid units
-  view.panX = view.panStart.panX0 - dxPx / cell;
-  view.panY = view.panStart.panY0 - dyPx / cell;
-
-  draw();
+canvas.addEventListener('pointermove',e=>{
+	const p=eventPoint(e);
+	if(!pointers.has(e.pointerId)) {
+		if(e.pointerType==='mouse' && !gesture) {
+			const id=pickArrow(p.x,p.y);
+			if(id!==hoverId) {hoverId=id;canvas.style.cursor=id>=0?'pointer':'grab';requestDraw();}
+		}
+		return;
+	}
+	pointers.set(e.pointerId,p);
+	if(!gesture || !game) return;
+	if(gesture.mode==='pinch' && pointers.size>=2) {
+		const [a,b]=[...pointers.values()],mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+		view.zoom=clamp(gesture.zoom*Math.hypot(a.x-b.x,a.y-b.y)/gesture.distance,.6,48);
+		const cell=transform().cell;
+		view.cx=gesture.wx-(mx-width/2)/cell;view.cy=gesture.wy-(my-height/2)/cell;
+		constrainView();updateUI();requestDraw(true);
+	} else if(gesture.mode==='pending' || gesture.mode==='pan') {
+		if(gesture.mode==='pan' || Math.hypot(p.x-gesture.x,p.y-gesture.y)>6) {
+			gesture.mode='pan';canvas.style.cursor='grabbing';
+			view.cx=gesture.cx-(p.x-gesture.x)/gesture.cell;view.cy=gesture.cy-(p.y-gesture.y)/gesture.cell;
+			constrainView();requestDraw(true);
+		}
+	}
 });
-
-canvas.addEventListener("pointerup",(e)=>{
-  if (!view.isPanning) return;
-  view.isPanning = false;
-  view.panStart = null;
-  try { canvas.releasePointerCapture(e.pointerId); } catch {}
+canvas.addEventListener('pointerup',e=>{
+	const g=gesture,p=eventPoint(e);
+	pointers.delete(e.pointerId);
+	try {canvas.releasePointerCapture(e.pointerId);} catch(_) {}
+	if(pointers.size>=2) beginPinch();
+	else if(pointers.size===1) {
+		const a=[...pointers.values()][0];gesture={mode:'pan',x:a.x,y:a.y,cx:view.cx,cy:view.cy,cell:transform().cell,forcePan:true};
+	} else {
+		gesture=null;
+		if(g && g.mode==='pending' && !g.forcePan) {const id=pickArrow(p.x,p.y);if(id>=0) makeMove(id);}
+	}
+	canvas.style.cursor='grab';
 });
-canvas.addEventListener("pointercancel", ()=>{
-  view.isPanning = false;
-  view.panStart = null;
+function cancelPointers() {pointers.clear();gesture=null;hoverId=-1;canvas.style.cursor='grab';requestDraw();}
+canvas.addEventListener('pointercancel',cancelPointers);
+canvas.addEventListener('pointerleave',()=>{if(!gesture){hoverId=-1;requestDraw();}});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('wheel',e=>{if(!game||busy)return;e.preventDefault();const p=eventPoint(e);zoomAt(Math.exp(-clamp(e.deltaY,-100,100)*.005),p.x,p.y);},{passive:false});
+window.addEventListener('blur',cancelPointers);
+$('settingsForm').addEventListener('submit',e=>{e.preventDefault();const s=readSettings();if(s)loadPuzzle(s.N,s.seed);});
+$('newBtn').addEventListener('click',newPuzzle);
+$('hintBtn').addEventListener('click',hint);
+$('undoBtn').addEventListener('click',undo);
+$('replayBtn').addEventListener('click',replay);
+$('demoBtn').addEventListener('click',toggleDemo);
+$('zoomOutBtn').addEventListener('click',()=>zoomAt(1/1.3));
+$('zoomInBtn').addEventListener('click',()=>zoomAt(1.3));
+$('fitBtn').addEventListener('click',fitView);
+$('overlayNew').addEventListener('click',newPuzzle);
+$('overlayReplay').addEventListener('click',()=>game?replay():$('settingsForm').requestSubmit());
+$('overlayUndo').addEventListener('click',undo);
+document.addEventListener('keydown',e=>{
+	if(e.target.matches('input,textarea,select') || e.altKey || e.metaKey || (e.ctrlKey && e.key.toLowerCase()!=='z')) return;
+	const k=e.key.toLowerCase();
+	if(k==='h') {e.preventDefault();hint();}
+	else if(k==='z') {e.preventDefault();undo();}
+	else if(k==='r') {e.preventDefault();replay();}
+	else if(k==='f') {e.preventDefault();fitView();}
+	else if(k==='+' || k==='=') {e.preventDefault();zoomAt(1.3);}
+	else if(k==='-') {e.preventDefault();zoomAt(1/1.3);}
+	else if(k==='escape') {stopDemo();hintId=-1;$('help').open=false;updateUI();requestDraw();}
+	else if(k==='enter' && e.target===canvas && hintId>=0) {e.preventDefault();makeMove(hintId);}
 });
-
-
-/* ---------- UI ---------- */
-function resetGame(){
-  const N = clampInt(+document.getElementById("nIn").value, 20, 200);
-  const seed = (+document.getElementById("sIn").value) | 0;
-  startSearch({ N, seed });
-}
-function fitCanvasToWindow(){
-  const header = document.querySelector("header");
-  const h = header ? header.getBoundingClientRect().height : 0;
-
-  const w = window.innerWidth;
-  const availH = window.innerHeight - h;
-
-  const side = Math.max(260, Math.min(w, availH) - 16); // margin
-  canvas.style.width = side + "px";
-  canvas.style.height = side + "px";
-
-  // keep internal resolution crisp on HiDPI
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.floor(side * dpr);
-  canvas.height = Math.floor(side * dpr);
-
-  draw();
-}
-
-function setZoom(z){
-  // clamp and update HUD
-  view.zoom = Math.max(0.25, Math.min(4.0, z));
-  const pct = Math.round(view.zoom * 100);
-  const el = document.getElementById("zoomTxt");
-  if (el) el.textContent = pct + "%";
-  draw();
-}
-
-function resetViewFit(){
-  // Fit means: zoom=1 and pan centered
-  view.panX = 0;
-  view.panY = 0;
-  setZoom(1.0);
-}
-
-document.getElementById("newBtn").addEventListener("click", ()=>{
-  document.getElementById("sIn").value = (Math.random()*2**31)|0;
-  resetGame();
+new ResizeObserver(resize).observe($('stage'));
+window.addEventListener('resize',resize);
+window.addEventListener('pagehide',()=>{cleanupWorker();stopDemo();});
+window.addEventListener('pageshow',e=>{if(e.persisted && busy){const s=readSettings();if(s)loadPuzzle(s.N,s.seed);}});
+// Read-only diagnostics, also useful when maintaining this standalone file.
+window.ArrowsDebug=Object.freeze({
+	version:'1.0',
+	snapshot:()=>game?{N:game.N,seed:game.seed,remaining:game.remaining,strikes:game.strikes,arrows:game.arrows.length,
+		available:[...game.available],covered:game.owner.reduce((n,id)=>n+(id>=0),0),busy,
+		ms:game.ms,history:game.history.length,animations:effects.length,zoom:view.zoom}:null,
+	validate:()=>game?engine.validate({N:game.N,seed:game.seed,ms:game.ms,arrows:game.arrows.map(a=>({cells:a.cells})),solution:game.solution}):null
 });
-document.getElementById("zoomInBtn").addEventListener("click", ()=>{
-  setZoom(view.zoom * 1.2);
-});
-document.getElementById("zoomOutBtn").addEventListener("click", ()=>{
-  setZoom(view.zoom / 1.2);
-});
-document.getElementById("zoomResetBtn").addEventListener("click", ()=>{
-  resetViewFit();
-});
-window.addEventListener("resize", fitCanvasToWindow);
-/* ---------- Boot ---------- */
-makePool();
-setStatus("Idle");
-fitCanvasToWindow();
-resetViewFit();
-resetGame();
+resize();updateUI();
+let initialN=70,initialSeed=42;
+try {
+	const hash=new URLSearchParams(location.hash.slice(1)),n=Number(hash.get('n')),s=Number(hash.get('seed'));
+	if(hash.has('n')&&Number.isInteger(n)&&n>=8&&n<=200) initialN=n;
+	if(hash.has('seed')&&Number.isInteger(s)&&s>=0&&s<=4294967295) initialSeed=s;
+} catch(_) {}
+loadPuzzle(initialN,initialSeed);
+
 </script>
 </body>
 </html>
