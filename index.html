@@ -690,10 +690,14 @@ function makeMove(id, automatic=false) {
 	hoverId=-1; hintId=-1;
 	const hit=firstBlocker(id), start=performance.now();
 	if(hit) {
-		game.strikes++; game.history.push({id,ok:false}); a.animating=true;
+		const dotsPerSecond=clamp(Number($('speedInput').value)||60,5,200);
+		const record={id,ok:false,strikeApplied:false};
+		game.history.push(record); a.animating=true;
+		// Stop just shy of the blocking geometry. Forward and return travel both use
+		// the exact same dots-per-second velocity as successful exits.
 		effects.push({type:'bump',id,start,total:Math.max(.1,hit.distance-.17),hit,
-			duration:reduceMotion?120:clamp(400+hit.distance*5,400,750)});
-		setStatus('Blocked. Clear the whole lane ahead of that arrow first.',true);
+			dotsPerSecond,phase:'forward',impactAt:null,record});
+		setStatus('That arrow is heading toward an obstruction...');
 	} else {
 		game.history.push({id,ok:true}); removeLogical(id);
 		const {cell,ox,oy}=transform();
@@ -716,7 +720,8 @@ function undo() {
 	if(!game || busy || !game.history.length) return;
 	stopDemo(); clearEffects(); hoverId=-1; hintId=-1;
 	const last=game.history.pop();
-	if(last.ok) restoreLogical(last.id); else game.strikes=Math.max(0,game.strikes-1);
+	if(last.ok) restoreLogical(last.id);
+	else if(last.strikeApplied) game.strikes=Math.max(0,game.strikes-1);
 	setOverlay('none'); setStatus(last.ok?'Last arrow restored.':'Last mistake undone.'); updateUI(); requestDraw(true);
 }
 function replay() {
@@ -845,7 +850,20 @@ function draw(now) {
 		if(effect.type==='exit') {
 			const elapsed=(now-effect.start)/1000;
 			if(elapsed*effect.dotsPerSecond<effect.total) return true;
-		} else if(now-effect.start<effect.duration) return true;
+		} else {
+			const travelMs=(effect.total/effect.dotsPerSecond)*1000;
+			if(effect.phase==='forward' && now-effect.start>=travelMs) {
+				effect.phase='return';
+				effect.impactAt=effect.start+travelMs;
+				if(effect.record && !effect.record.strikeApplied) {
+					effect.record.strikeApplied=true;
+					game.strikes++; updateUI();
+					setStatus('Blocked. Clear the whole lane ahead of that arrow first.',true);
+				}
+			}
+			if(effect.phase==='forward') return true;
+			if(now-effect.impactAt<travelMs) return true;
+		}
 		if(game && effect.type==='bump') game.arrows[effect.id].animating=false;
 		completed=true;return false;
 	});
@@ -865,15 +883,23 @@ function draw(now) {
 			const fade=1-clamp((p-.12)/.88,0,1)**1.35;
 			paintArrow(ctx,a,advance,'#242729',t,false,fade);
 		} else {
-			const p=clamp((now-effect.start)/effect.duration,0,1);
-			let k;
-			if(p<.44) k=1-Math.pow(1-p/.44,3);
-			else if(p<.53) k=1;
-			else {const q=(p-.53)/.47;k=1-q*q*(3-2*q);}
-			paintArrow(ctx,a,effect.total*k,'#bb3e3e',t,false,1);
-			if(p>.28 && p<.8) {
-				ctx.save();ctx.globalAlpha=.5*Math.sin((p-.28)/.52*Math.PI);ctx.strokeStyle='#bb3e3e';ctx.lineWidth=.08;
-				ctx.beginPath();ctx.arc(effect.hit.x,effect.hit.y,.28+.12*p,0,Math.PI*2);ctx.stroke();ctx.restore();
+			const travelMs=(effect.total/effect.dotsPerSecond)*1000;
+			let advance,color='#242729';
+			if(effect.phase==='forward') {
+				advance=Math.min(effect.total,((now-effect.start)/1000)*effect.dotsPerSecond);
+			} else {
+				const returnElapsed=Math.max(0,(now-effect.impactAt)/1000);
+				advance=Math.max(0,effect.total-returnElapsed*effect.dotsPerSecond);
+				color='#bb3e3e';
+			}
+			paintArrow(ctx,a,advance,color,t,false,1);
+			// The impact marker exists only after actual contact, never while approaching.
+			if(effect.phase==='return') {
+				const p=clamp((now-effect.impactAt)/Math.max(1,travelMs),0,1);
+				if(p<.45) {
+					ctx.save();ctx.globalAlpha=.45*(1-p/.45);ctx.strokeStyle='#bb3e3e';ctx.lineWidth=.08;
+					ctx.beginPath();ctx.arc(effect.hit.x,effect.hit.y,.28+.12*(p/.45),0,Math.PI*2);ctx.stroke();ctx.restore();
+				}
 			}
 		}
 	}
