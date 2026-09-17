@@ -194,7 +194,7 @@
 				<p>Check the <strong>entire line from the head to the edge</strong>. Another arrow anywhere on that line blocks the move. A blocked arrow comes back and costs one mistake.</p>
 				<p>Clear every arrow before making nine mistakes. There is no timer, and any legal move is safe to make.</p>
 				<p><strong>Move around:</strong> drag to pan, scroll or pinch to zoom, F to fit. H highlights a legal move; Enter plays it. Z undoes a move or mistake. R replays this puzzle.</p>
-				<p>Every puzzle uses every dot exactly once and has a checked solution. The same grid size, seed, and difficulty reproduce the same board. Higher difficulty builds longer, more tangled paths and deeper blocker chains. Works offline.</p>
+				<p>Every puzzle uses every dot exactly once and has a checked solution. The same grid size, seed, and difficulty reproduce the same board. Difficulty 1-5 runs from easy to the previous maximum; 6-10 increasingly adds very long, folded tails and deeper blocker chains. Works offline.</p>
 			</div>
 		</details>
 	</footer>
@@ -232,22 +232,27 @@ function createEngine() {
 		if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 10) throw new RangeError('Difficulty must be an integer from 1 to 10.');
 		const start = performance.now(), rng = rngFrom(seed);
 		const d = (difficulty - 1) / 9;
-		// Difficulty changes construction itself: higher settings grow longer snakes,
-		// favor turns while joining them, and prefer orientations with more blockers.
-		const absorbPasses = 3 + Math.round(d * 2);
-		const longChance = .06 + d * .18;
-		const shortTargetMin = Math.round(6 - d);
-		const shortTargetSpan = Math.round(11 - d * 5);
-		const longTargetMin = Math.round(18 + d * 28);
-		const longTargetSpan = Math.round(18 + d * 20);
-		const maxTailLength = Math.round(48 + d * 32);
-		const turnBias = .25 + d * 3.2;
-		const foldPasses = 1 + Math.round(d * 4);
-		const foldCandidateMax = Math.round(5 + d * 9);
-		const maxFoldLength = Math.round(64 + d * 32);
-		const blockerWeight = 5 + d * 8;
-		const depthWeight = d * 60;
-		const chainWeight = d * 900;
+		// Extended difficulty curve. The old 10/10 lives around the middle of this
+		// scale; the upper half deliberately creates a heavy tail of exceptionally
+		// long, folded snakes without turning the whole board into a few giant arrows.
+		const intensity = d * 2.05;
+		const baseIntensity = Math.min(1, intensity);
+		const extreme = Math.max(0, intensity - 1);
+		const absorbPasses = 3 + Math.round(baseIntensity * 2 + extreme * 3);
+		const longChance = .06 + baseIntensity * .18 + extreme * .025;
+		const shortTargetMin = Math.max(4, Math.round(6 - baseIntensity - extreme * .35));
+		const shortTargetSpan = Math.max(4, Math.round(11 - baseIntensity * 5 - extreme * 1.5));
+		const longTargetMin = Math.round(18 + baseIntensity * 28 + extreme * 38);
+		const longTargetSpan = Math.round(18 + baseIntensity * 20 + extreme * 34);
+		const maxTailLength = Math.min(N*N, Math.round(48 + baseIntensity * 32 + extreme * 84));
+		const turnBias = .25 + baseIntensity * 3.2 + extreme * 4.3;
+		const foldPasses = 1 + Math.round(baseIntensity * 4 + extreme * 5);
+		const foldCandidateMax = Math.round(5 + baseIntensity * 9 + extreme * 24);
+		const maxFoldLength = Math.min(N*N, Math.round(64 + baseIntensity * 32 + extreme * 130));
+		const blockerWeight = 5 + baseIntensity * 8 + extreme * 8;
+		const depthWeight = 60 * intensity;
+		const chainWeight = 900 * intensity + 2400 * extreme;
+		const collectorCount = extreme > 0 ? Math.max(0, Math.round(extreme * 3)) : 0;
 		const total = N * N, owner = new Int32Array(total);
 		const tiles = [];
 		for (let y = 0; y < N; y++) {
@@ -327,10 +332,18 @@ function createEngine() {
 				if (!live[id]) continue;
 				const a = tiles[id];
 				if (!a.growTarget) {
-					const ambitious = rng() < longChance;
-					a.growTarget = ambitious
-						? longTargetMin + Math.floor((1-rng()*rng()) * longTargetSpan)
-						: shortTargetMin + Math.floor(rng() * Math.max(1,shortTargetSpan));
+					// Above the old difficulty ceiling, reserve a few early-removable paths as
+					// collectors. Because they may absorb any later-ranked neighbor, they can
+					// become very long snakes while most arrows remain medium sized.
+					const collector = a.rank < collectorCount;
+					const ambitious = collector || rng() < longChance;
+					if (collector) {
+						a.growTarget = Math.min(maxTailLength, Math.round(longTargetMin + longTargetSpan * (.82 + rng()*.18)));
+					} else {
+						a.growTarget = ambitious
+							? longTargetMin + Math.floor((1-rng()*rng()) * longTargetSpan)
+							: shortTargetMin + Math.floor(rng() * Math.max(1,shortTargetSpan));
+					}
 				}
 				const target = a.growTarget;
 				while (a.cells.length < target) {
@@ -342,7 +355,7 @@ function createEngine() {
 						if (other === id || !live[other] || b.rank < a.rank) continue;
 						if (b.cells[0] !== cell && b.cells[b.cells.length - 1] !== cell) continue;
 						if (a.cells.length + b.cells.length > maxTailLength) continue;
-						if (pass > 0 && a.cells.length >= 10 + Math.round(10*d) && b.cells.length >= 10 + Math.round(10*d)) continue;
+						if (pass > 0 && a.cells.length >= 10 + Math.round(14*intensity) && b.cells.length >= 10 + Math.round(14*intensity)) continue;
 						const makesTurn = prev && prev !== cell-tail;
 						const score = rng()*2 + (makesTurn ? turnBias : 0) + (b.cells.length < 5 ? .4 : 0) + d*Math.min(1.5,b.cells.length*.05);
 						if (score > bestScore) { bestScore = score; best = {other, cell}; }
@@ -356,6 +369,43 @@ function createEngine() {
 				}
 			}
 		}
+		// At extreme settings, let a few earliest paths claim compatible body
+		// detours first. This reliably creates a small number of monster tails while
+		// preserving the same certified head/exit edge and leaving plenty of medium
+		// arrows elsewhere on the board.
+		if (collectorCount > 0) {
+			const collectorIds = order.filter(id => live[id] && tiles[id].rank < collectorCount);
+			const collectorSet = new Set(collectorIds);
+			const stitchLimit = Math.round(14 + extreme * 48);
+			const stitchPasses = 1 + Math.round(extreme * 4);
+			for (let pass = 0; pass < stitchPasses; pass++) {
+				let changed = false;
+				for (const id of order) {
+					if (!live[id] || collectorSet.has(id) || tiles[id].cells.length > stitchLimit) continue;
+					const b = tiles[id];
+					let done = false;
+					for (const reverse of [false, true]) {
+						const bc = reverse ? b.cells.slice().reverse() : b.cells;
+						for (const near of neighbors(bc[0])) {
+							const aid = owner[near];
+							if (!collectorSet.has(aid) || !live[aid]) continue;
+							const a = tiles[aid];
+							if (a.rank > b.rank || a.cells.length + bc.length > maxFoldLength) continue;
+							const i = a.cells.indexOf(near);
+							if (i < 1 || i >= a.cells.length - 1) continue;
+							const end = bc[bc.length - 1], next = a.cells[i+1];
+							if (Math.abs(end%N-next%N)+Math.abs(Math.floor(end/N)-Math.floor(next/N)) !== 1) continue;
+							a.cells.splice(i+1, 0, ...bc);
+							for (const c of bc) owner[c] = aid;
+							live[id] = 0; changed = true; done = true; break;
+						}
+						if (done) break;
+					}
+				}
+				if (!changed) break;
+			}
+		}
+
 		// Fold small late pieces into an earlier path through a local detour.
 		// Never change its first edge: that edge is the certified exit direction.
 		for (let pass = 0; pass < foldPasses; pass++) {
@@ -413,7 +463,7 @@ function createEngine() {
 		// difficulty, try several deterministic peel orders and retain the valid one
 		// with the deeper blocker chain. This changes complexity without gambling on
 		// whether the board is solvable: every retained plan is already a full solution.
-		const orientationTrials = 1 + Math.round(d * 11);
+		const orientationTrials = 1 + Math.round(baseIntensity * 11 + extreme * 28);
 		let bestPlan = null, bestPlanScore = -Infinity;
 		for (let trial = 0; trial < orientationTrials; trial++) {
 			const counts = Int32Array.from(options, o => o.initialCount);
@@ -433,7 +483,7 @@ function createEngine() {
 					if (removed[o.id]) continue;
 					const depth = optionDepth(o);
 					const followsLast = lastRemoved >= 0 && o.blockers.includes(lastRemoved);
-					const explore = trial ? rng() * (18 + 65*d) : 0;
+					const explore = trial ? rng() * (18 + 65*baseIntensity + 42*extreme) : 0;
 					const value = o.score + depth * depthWeight + (followsLast ? chainWeight : 0) + explore;
 					if (value > bestValue) { bestValue = value; best = i; }
 				}
@@ -449,7 +499,7 @@ function createEngine() {
 				for (const wait of waiting[option.id]) if (--counts[wait] === 0) free.push(wait);
 			}
 			if (trialSolution.length !== arrows.length) continue;
-			const planScore = maxDepth * (20 + 160*d) + dependencyTotal * (1 + 5*d);
+			const planScore = maxDepth * (20 + 160*baseIntensity + 210*extreme) + dependencyTotal * (1 + 5*baseIntensity + 6*extreme);
 			if (planScore > bestPlanScore) {
 				bestPlanScore = planScore;
 				bestPlan = {chosen:Array.from(chosen), solution:trialSolution.slice(), maxDepth};
