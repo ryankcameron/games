@@ -452,6 +452,26 @@ const pointers = new Map();
 let gesture = null, overlayMode = 'loading';
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const number = n => n.toLocaleString('en-CA');
+const STORAGE_KEY = 'arrows-procedural-v1';
+let restoredView = null;
+function readPersisted() {
+	try {
+		const raw=localStorage.getItem(STORAGE_KEY);
+		if(!raw) return null;
+		const v=JSON.parse(raw);
+		if(!v || v.version!==1) return null;
+		return v;
+	} catch(_) { return null; }
+}
+function savePersisted() {
+	try {
+		const N=game?.N ?? Number($('sizeInput').value);
+		const seed=game?.seed ?? Number($('seedInput').value);
+		const speed=clamp(Number($('speedInput').value)||2.5,.2,10);
+		const payload={version:1,N,seed,speed,view:game?{zoom:view.zoom,cx:view.cx,cy:view.cy}:null};
+		localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
+	} catch(_) { /* Storage can be disabled; the game still works normally. */ }
+}
 
 function setStatus(text, error = false) {
 	$('status').textContent = text;
@@ -577,12 +597,18 @@ function loadPuzzle(N, seed) {
 		try { game=compileLevel(level,0); } catch(error) { fail(error); return; }
 		game.ms=Math.round(performance.now()-started);
 		busy=false; effects=[]; hoverId=-1; hintId=-1;
-		view={zoom:1,cx:(N-1)/2,cy:(N-1)/2};
+		if(restoredView && restoredView.N===N && restoredView.seed===seed) {
+			view={zoom:clamp(Number(restoredView.zoom)||1,.6,48),cx:Number(restoredView.cx),cy:Number(restoredView.cy)};
+			if(!Number.isFinite(view.cx) || !Number.isFinite(view.cy)) view={zoom:1,cx:(N-1)/2,cy:(N-1)/2};
+			constrainView();
+		} else view={zoom:1,cx:(N-1)/2,cy:(N-1)/2};
+		restoredView=null;
 		$('verifiedLabel').textContent='FULL COVERAGE \u00b7 VERIFIED SOLUTION';
 		$('verifiedLabel').title='Every dot belongs to exactly one path. Every step of a complete solution was independently checked.';
 		setOverlay('none'); updateUI();
 		setStatus(`Built in ${number(game.ms)} ms. ${number(N*N)} / ${number(N*N)} dots used. Drag to pan; scroll or pinch to zoom.`);
 		try { history.replaceState(null,'',`#n=${N}&seed=${seed}`); } catch (_) { /* file:// history is optional */ }
+		savePersisted();
 		requestDraw(true);
 	}
 	let fallbackUsed=false;
@@ -868,11 +894,11 @@ function zoomAt(factor,sx=width/2,sy=height/2) {
 	view.zoom=clamp(view.zoom*factor,.6,48);
 	const cell=old.fit*view.zoom;
 	view.cx=wx-(sx-width/2)/cell;view.cy=wy-(sy-height/2)/cell;
-	constrainView();hoverId=-1;updateUI();requestDraw(true);
+	constrainView();hoverId=-1;updateUI();savePersisted();requestDraw(true);
 }
 function fitView() {
 	if(!game) return;
-	view={zoom:1,cx:(game.N-1)/2,cy:(game.N-1)/2};hoverId=-1;updateUI();requestDraw(true);
+	view={zoom:1,cx:(game.N-1)/2,cy:(game.N-1)/2};hoverId=-1;updateUI();savePersisted();requestDraw(true);
 }
 function segmentDistance2(x,y,ax,ay,bx,by) {
 	const dx=bx-ax,dy=by-ay,den=dx*dx+dy*dy;
@@ -949,6 +975,7 @@ canvas.addEventListener('pointerup',e=>{
 		const a=[...pointers.values()][0];gesture={mode:'pan',x:a.x,y:a.y,cx:view.cx,cy:view.cy,cell:transform().cell,forcePan:true};
 	} else {
 		gesture=null;
+		savePersisted();
 		if(g && g.mode==='pending' && !g.forcePan) {const id=pickArrow(p.x,p.y);if(id>=0) makeMove(id);}
 	}
 	canvas.style.cursor='grab';
@@ -960,7 +987,7 @@ canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('wheel',e=>{if(!game||busy)return;e.preventDefault();const p=eventPoint(e);zoomAt(Math.exp(-clamp(e.deltaY,-100,100)*.005),p.x,p.y);},{passive:false});
 window.addEventListener('blur',cancelPointers);
 $('settingsForm').addEventListener('submit',e=>{e.preventDefault();const s=readSettings();if(s)loadPuzzle(s.N,s.seed);});
-$('speedInput').addEventListener('change',()=>{const v=clamp(Number($('speedInput').value)||2.5,.2,10);$('speedInput').value=String(Math.round(v*10)/10);setStatus(`Arrow exit animation: ${$('speedInput').value} seconds.`);});
+$('speedInput').addEventListener('change',()=>{const v=clamp(Number($('speedInput').value)||2.5,.2,10);$('speedInput').value=String(Math.round(v*10)/10);savePersisted();setStatus(`Arrow exit animation: ${$('speedInput').value} seconds.`);});
 $('newBtn').addEventListener('click',newPuzzle);
 $('hintBtn').addEventListener('click',hint);
 $('undoBtn').addEventListener('click',undo);
@@ -986,7 +1013,7 @@ document.addEventListener('keydown',e=>{
 });
 new ResizeObserver(resize).observe($('stage'));
 window.addEventListener('resize',resize);
-window.addEventListener('pagehide',()=>{cleanupWorker();stopDemo();});
+window.addEventListener('pagehide',()=>{savePersisted();cleanupWorker();stopDemo();});
 window.addEventListener('pageshow',e=>{if(e.persisted && busy){const s=readSettings();if(s)loadPuzzle(s.N,s.seed);}});
 // Read-only diagnostics, also useful when maintaining this standalone file.
 window.ArrowsDebug=Object.freeze({
@@ -998,11 +1025,22 @@ window.ArrowsDebug=Object.freeze({
 });
 resize();updateUI();
 let initialN=70,initialSeed=42;
+const saved=readPersisted();
+if(saved) {
+	if(Number.isInteger(saved.N)&&saved.N>=8&&saved.N<=200) initialN=saved.N;
+	if(Number.isInteger(saved.seed)&&saved.seed>=0&&saved.seed<=4294967295) initialSeed=saved.seed;
+	if(Number.isFinite(saved.speed)&&saved.speed>=.2&&saved.speed<=10) $('speedInput').value=String(saved.speed);
+	if(saved.view) restoredView={N:initialN,seed:initialSeed,...saved.view};
+}
 try {
 	const hash=new URLSearchParams(location.hash.slice(1)),n=Number(hash.get('n')),s=Number(hash.get('seed'));
-	if(hash.has('n')&&Number.isInteger(n)&&n>=8&&n<=200) initialN=n;
-	if(hash.has('seed')&&Number.isInteger(s)&&s>=0&&s<=4294967295) initialSeed=s;
+	const explicitN=hash.has('n')&&Number.isInteger(n)&&n>=8&&n<=200;
+	const explicitSeed=hash.has('seed')&&Number.isInteger(s)&&s>=0&&s<=4294967295;
+	if(explicitN) initialN=n;
+	if(explicitSeed) initialSeed=s;
+	if(explicitN || explicitSeed) restoredView=null;
 } catch(_) {}
+$('sizeInput').value=String(initialN); $('seedInput').value=String(initialSeed);
 loadPuzzle(initialN,initialSeed);
 
 </script>
