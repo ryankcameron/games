@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f7f7">
+<meta name="description" content="An endless, entirely monochrome match-three game from Station Antiques. A cabinet of little curiosities, made to be enjoyed.">
+<title>The Curiosity Cabinet | Station Antiques</title>
+<style>
+:root{color-scheme:light;--paper:#f7f7f7;--ink:#171717;--muted:#686868;--line:#dedede;--tile:#fff;--board:#ececec;--soft:#eee;--serif:Georgia,'Times New Roman',serif;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-tap-highlight-color:transparent}button,input,select{font:inherit;color:inherit}button{cursor:pointer}button:disabled{cursor:default;opacity:.4}button,a,input,select{outline-offset:4px}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ink)}button{touch-action:manipulation}a{color:inherit}svg{display:block;flex-shrink:0}button svg{pointer-events:none}[hidden]{display:none!important}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.shell{max-width:1120px;margin:auto;padding:25px 40px 18px}.masthead{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:19px;gap:16px}.brand{display:flex;align-items:center;gap:12px;text-decoration:none}.monogram{width:41px;height:41px;border:1px solid var(--ink);display:grid;place-items:center;font-family:var(--serif);font-size:18px;letter-spacing:-2px;position:relative}.monogram:after{content:'';position:absolute;inset:3px;border:1px solid #b0b0b0;pointer-events:none}.brand-name{display:block;font-size:11px;font-weight:750;letter-spacing:2.3px}.brand-place{font-size:10px;letter-spacing:1.6px;color:var(--muted)}.header-actions{display:flex;align-items:center;gap:8px}.icon-btn{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line);background:transparent;border-radius:50%;transition:background .15s}.icon-btn:hover{background:#e9e9e9}.icon-btn svg{width:17px;height:17px}.text-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:transparent;border:1px solid var(--line);border-radius:6px;padding:8px 13px;white-space:nowrap;font-size:12px;font-weight:600}.text-btn:hover{background:#ededed}.text-btn svg{width:16px;height:16px}.intro{display:flex;align-items:end;justify-content:space-between;gap:20px;padding:22px 0 20px}.eyebrow{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;color:var(--muted);margin:0 0 5px}h1{font-family:var(--serif);font-weight:400;letter-spacing:-1.8px;font-size:clamp(30px,4vw,43px);line-height:1.13;margin:0}h1 span{font-style:italic}.subtitle{margin:8px 0 0;color:var(--muted);font-size:13px}.endless-tag{display:flex;gap:7px;align-items:center;font-size:11px;white-space:nowrap;margin-bottom:4px;color:var(--muted)}.endless-tag svg{width:18px;height:18px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 272px;gap:26px;align-items:start}.game-panel{min-width:0}.scorebar{background:var(--ink);color:#fff;display:grid;grid-template-columns:1.25fr 1fr .8fr .85fr;border-radius:9px;padding:14px 0 12px;margin-bottom:14px;position:relative;overflow:hidden}.stat{padding:0 17px;min-width:0}.stat+.stat{border-left:1px solid #474747}.stat-label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:1.7px;color:#bcbcbc;margin-bottom:2px}.stat-number{display:block;font-variant-numeric:tabular-nums;font-family:var(--serif);font-size:26px;line-height:1.15;letter-spacing:-.5px;white-space:nowrap}.stat:not(:first-child) .stat-number{font-size:22px;padding-top:3px}.record-star{display:none}.new-record .record-star{display:inline;font-family:var(--sans);font-size:11px}.board-frame{border:1px solid #d4d4d4;background:#f0f0f0;padding:9px;border-radius:12px;box-shadow:0 4px 16px #00000005;position:relative}.board-topline{display:flex;align-items:center;justify-content:space-between;gap:5px;padding:1px 3px 8px;font-size:9px;letter-spacing:1.25px;text-transform:uppercase;color:#686868}.board-topline span:last-child{letter-spacing:.35px;text-transform:none}.board{width:100%;margin-inline:auto;aspect-ratio:var(--cols)/var(--rows);position:relative;background:var(--board);border-radius:7px;touch-action:pinch-zoom;isolation:isolate;overflow:hidden;user-select:none;-webkit-user-select:none}.board[data-busy="true"]{cursor:wait}.tile{position:absolute;left:0;top:0;width:calc(100% / var(--cols));height:calc(100% / var(--rows));border:0;padding:3px;background:none;transition:none;outline:none;-webkit-user-select:none;user-select:none;will-change:transform;display:grid;place-items:stretch;z-index:1}.face{display:grid;place-items:center;position:relative;background:var(--tile);color:var(--ink);border:1px solid #d7d7d7;border-radius:8px;width:100%;height:100%;box-shadow:0 2px 1px #00000008;transition:background .12s,border-color .12s,box-shadow .12s;pointer-events:none}.face>.object-icon{width:82%;height:82%;max-width:60px;max-height:60px}.tile:hover .face{background:#f7f7f7;border-color:#aaa}.tile.selected{z-index:5}.tile.selected .face{border:2px solid var(--ink);box-shadow:0 0 0 1px #fff,0 0 0 3px #171717;transform:scale(.90);background:#f3f3f3}.tile:focus-visible{outline:none;z-index:6}.tile:focus-visible .face{outline:2px dashed var(--ink);outline-offset:-5px}.tile.hinted .face{animation:hint-pulse 1s ease-in-out infinite}.tile.wild .face{background:#191919;color:#fff;border-color:#191919}.tile.wild:hover .face{background:#333}.tile.wild.selected .face{background:#191919}.tile.wild .object-icon{width:70%;height:70%}.special-badge{position:absolute;bottom:3px;right:3px;width:15px;height:15px;border-radius:50%;background:#171717;color:white;display:grid;place-items:center;border:1px solid white;box-shadow:0 0 0 1px #171717}.special-badge svg{width:10px;height:10px}.tile.sweep .face:before{content:'';position:absolute;inset:4px;border-top:1px solid #a3a3a3;border-bottom:1px solid #a3a3a3;border-radius:3px}.tile.burst .face:before{content:'';position:absolute;inset:3px;border:1px dashed #999;border-radius:50%;opacity:.6}.labels-on .tile .face>.object-icon{width:69%;height:69%;margin-top:-11%}.object-label{position:absolute;bottom:6%;font-size:clamp(6px,1vw,9px);font-weight:650;letter-spacing:.15px;line-height:1}.tile.wild .object-label{color:white}.compact .tile{padding:2px}.compact .face{border-radius:5px}.compact .special-badge{width:12px;height:12px;right:1px;bottom:1px}.compact .special-badge svg{width:8px;height:8px}.compact .object-label{font-size:6px}
+@keyframes hint-pulse{0%,100%{box-shadow:inset 0 0 0 2px #222;transform:scale(.91)}50%{box-shadow:inset 0 0 0 2px #222,0 2px 7px #0002;transform:scale(.99)}}.fx-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}.effects{position:absolute;inset:0;z-index:25;pointer-events:none;overflow:hidden}.points-pop{position:absolute;transform:translate(-50%,-50%);background:#171717;color:#fff;padding:4px 10px;border:1px solid #fff;border-radius:20px;font-size:14px;font-weight:750;letter-spacing:.4px;white-space:nowrap;box-shadow:0 3px 12px #0002;z-index:4}.beam{position:absolute;background:#171717;opacity:.9;box-shadow:0 0 0 5px #ffffffc9;border-radius:9px}.power-ring{position:absolute;border:3px solid var(--ink);border-radius:50%;box-shadow:0 0 0 5px #ffffffb3;transform:translate(-50%,-50%);width:10px;height:10px}.board-caption{display:flex;align-items:center;justify-content:space-between;gap:7px;min-height:29px;padding:5px 5px 0;font-size:11px;color:var(--muted)}.board-caption #status{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.board-caption #chain{font-weight:700;color:var(--ink);white-space:nowrap;letter-spacing:.4px}.controls{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:13px}.control{border:1px solid #d2d2d2;background:#fff;border-radius:7px;padding:11px 3px;font-size:11px;display:flex;align-items:center;justify-content:center;gap:7px;font-weight:650;transition:transform .12s,background .12s}.control:hover:not(:disabled){background:#eaeaea;transform:translateY(-1px)}.control:active:not(:disabled){transform:translateY(1px)}.control svg{width:16px;height:16px}.control.primary{background:var(--ink);color:#fff;border-color:var(--ink)}.control.primary:hover:not(:disabled){background:#333}.under-board{font-size:10px;color:var(--muted);text-align:center;margin:10px 0 0;line-height:1.6}
+.sidebar{display:grid;gap:16px}.quest-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:22px 21px;overflow:hidden;position:relative}.card-kicker{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px;text-transform:uppercase;letter-spacing:1.65px;font-weight:650;color:var(--muted)}.level-mark{border:1px solid var(--line);border-radius:50%;width:26px;height:26px;display:grid;place-items:center;color:var(--ink);font-family:var(--serif);font-size:13px;letter-spacing:0}.quest-card h2{font-family:var(--serif);font-weight:400;font-size:26px;line-height:1.12;letter-spacing:-.7px;margin:17px 0 7px}.quest-copy{font-size:12px;color:var(--muted);margin:0}.quest-target{display:flex;align-items:center;gap:13px;margin:20px 0 16px}.quest-icon{width:56px;height:56px;background:#f3f3f3;border-radius:9px;display:grid;place-items:center;border:1px solid #e7e7e7}.quest-icon svg{width:36px;height:36px}.quest-count{font-family:var(--serif);font-size:25px;line-height:1.1;font-variant-numeric:tabular-nums}.quest-count small{font-family:var(--sans);font-size:12px;color:var(--muted)}.quest-name{font-size:11px;color:var(--muted);margin-top:3px}.progress{height:5px;border-radius:5px;background:#e8e8e8;overflow:hidden}.progress>span{display:block;width:0;height:100%;background:var(--ink);border-radius:inherit;transition:width .35s ease}.quest-bottom{display:flex;justify-content:space-between;gap:8px;margin-top:10px;font-size:10px;color:var(--muted)}.quest-bottom strong{color:var(--ink);font-weight:650}.quest-reward-flash{animation:reward-flash .7s ease}@keyframes reward-flash{0%,100%{background:#fff}35%{background:#dedede}}
+.notes-card{padding:4px 4px 0}.notes-title{font-size:10px;text-transform:uppercase;letter-spacing:1.7px;font-weight:700;margin:0 0 14px}.power-guide{display:flex;gap:11px;margin:0 0 15px;align-items:center}.guide-symbol{width:35px;height:35px;border:1px solid #d4d4d4;display:grid;place-items:center;border-radius:7px;flex-shrink:0;background:#fff}.guide-symbol svg{width:21px;height:21px}.guide-symbol.dark{background:#171717;color:#fff;border-color:#171717}.guide-text{font-size:11px;line-height:1.5;color:var(--muted)}.guide-text strong{display:block;color:var(--ink);font-size:12px;font-weight:650}.rule-card{border-top:1px solid var(--line);padding:16px 4px 0;font-size:11px;color:var(--muted)}.rule-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}.rule-row strong{font-size:11px;color:var(--ink);font-weight:550}.save-line{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);margin-top:12px;padding-top:14px;font-size:10px}.save-line svg{width:13px;height:13px}.footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:27px;padding-top:15px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);letter-spacing:.3px}.footer span:last-child{font-family:var(--serif);font-style:italic;font-size:12px}
+.overlay{position:fixed;inset:0;background:#0005;z-index:100;display:flex;justify-content:flex-end;backdrop-filter:blur(3px)}.drawer{width:430px;max-width:100%;height:100%;background:var(--paper);display:flex;flex-direction:column;box-shadow:-15px 0 60px #0002}.modal-head{padding:24px 25px 19px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:start;gap:15px;flex-shrink:0}.modal-head h2{font:32px/1.1 var(--serif);letter-spacing:-.8px;margin:0}.modal-head .eyebrow{margin-bottom:7px}.modal-content{padding:21px 25px;overflow:auto;overscroll-behavior:contain;flex:1}.settings-section+.settings-section{border-top:1px solid var(--line);padding-top:23px;margin-top:23px}.settings-section h3{margin:0 0 14px;font-size:11px;letter-spacing:1.7px;text-transform:uppercase}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field>span,.range-head{font-size:12px;font-weight:600}.field select,.field input[type=number]{width:100%;border:1px solid #ccc;border-radius:5px;background:#fff;padding:9px 10px;min-height:40px}.field.full{grid-column:1/-1}.field small,.field-note{font-size:10px;color:var(--muted);line-height:1.5}.field-note{margin:10px 0 0}.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:10px 0;cursor:pointer}.toggle-row>span:first-child{display:block;font-size:12px}.toggle-row small{display:block;font-size:10px;color:var(--muted);margin-top:2px}.switch{position:relative;flex:0 0 34px;width:34px;height:20px}.switch input{position:absolute;inset:0;opacity:0;margin:0;width:100%;height:100%;cursor:pointer;z-index:2}.switch i{position:absolute;inset:0;background:#d2d2d2;border-radius:12px;transition:background .15s}.switch i:after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;background:#fff;border-radius:50%;box-shadow:0 1px 2px #0002;transition:transform .15s}.switch input:checked+i{background:#171717}.switch input:checked+i:after{transform:translateX(14px)}.switch input:focus-visible+i{outline:2px solid #171717;outline-offset:3px}.range-field{margin:16px 0}.range-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:9px}.range-head output{font-weight:400;color:var(--muted)}input[type=range]{width:100%;accent-color:#171717;height:15px;cursor:pointer}.modal-foot{padding:15px 25px 21px;border-top:1px solid var(--line);flex-shrink:0;background:var(--paper)}.modal-foot .field-note{margin:0 0 10px}.solid-btn{border:1px solid #171717;border-radius:6px;padding:12px 17px;background:#171717;color:#fff;font-size:12px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;gap:8px}.solid-btn:hover{background:#333}.wide{width:100%}.save-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.save-tools .text-btn{font-size:11px;padding:8px 10px}.reset-link{background:none;border:0;font-size:11px;text-decoration:underline;text-underline-offset:3px;color:var(--muted);padding:12px 0 0}.center-overlay{justify-content:center;align-items:center;padding:20px}.help-modal{width:520px;max-width:100%;max-height:90svh;border-radius:13px;background:var(--paper);display:flex;flex-direction:column;box-shadow:0 10px 80px #0003;overflow:hidden}.help-modal .modal-content{font-size:13px}.help-modal h3{font-family:var(--serif);font-weight:400;font-size:22px;line-height:1.15;margin:18px 0 8px}.help-modal h3:first-child{margin-top:0}.help-modal p{color:#5e5e5e;margin:8px 0 13px}.help-example{display:flex;justify-content:center;gap:6px;margin:17px 0}.help-example span{display:grid;place-items:center;width:49px;height:49px;background:#fff;border:1px solid #bbb;border-radius:7px}.help-example svg{width:30px;height:30px}.help-tip{border:1px solid var(--line);padding:12px 14px;border-radius:7px;font-size:11px;color:#555}.help-modal ul{padding-left:18px;color:#5e5e5e;line-height:1.65}.help-modal li{margin:5px 0}.confirm-modal{max-width:400px}.confirm-modal .modal-content{padding-top:12px;padding-bottom:12px}.confirm-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 25px 23px}.toast-stack{position:fixed;bottom:23px;left:50%;transform:translateX(-50%);z-index:200;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px;width:max-content;max-width:calc(100vw - 30px)}.toast{background:#171717;color:white;font-size:12px;line-height:1.5;padding:11px 19px;border-radius:8px;border:1px solid #fff4;box-shadow:0 5px 25px #0002;text-align:center;max-width:420px}.toast strong{font-family:var(--serif);font-size:16px;font-weight:400;display:block}
+@media(min-width:1300px) and (min-height:900px){.shell{padding-top:35px}.intro{padding-top:30px;padding-bottom:27px}.layout{gap:32px;grid-template-columns:minmax(0,1fr) 285px}}
+@media(min-width:801px) and (max-height:850px){.shell{max-width:995px;padding-top:17px}.masthead{padding-bottom:13px}.intro{padding:16px 0}h1{font-size:36px}.layout{grid-template-columns:minmax(0,1fr) 250px;gap:23px}.quest-card{padding:18px}.scorebar{padding:11px 0;margin-bottom:11px}.footer{margin-top:19px}.notes-card{padding-top:0}.power-guide{margin-bottom:12px}}
+@media(max-width:800px){.shell{padding:18px 22px}.layout{grid-template-columns:minmax(0,1fr) 218px;gap:18px}.brand-name{font-size:10px;letter-spacing:1.8px}.brand-place{font-size:9px}.intro{padding:20px 0}.quest-card{padding:17px 15px}.quest-card h2{font-size:23px}.stat{padding:0 11px}.stat-label{font-size:8px;letter-spacing:1px}.stat-number{font-size:23px}.stat:not(:first-child) .stat-number{font-size:20px}.notes-card{padding:0 2px}.guide-text{font-size:10px}.control{gap:4px;font-size:10px}.endless-tag{display:none}}
+@media(max-width:650px){.shell{padding:15px 14px 18px;max-width:510px}.masthead{padding-bottom:13px}.monogram{width:34px;height:34px;font-size:16px}.brand{gap:9px}.brand-name{font-size:9px;letter-spacing:1.55px}.brand-place{font-size:8px;letter-spacing:1.1px}.header-actions{gap:6px}.icon-btn{width:33px;height:33px}.header-actions .text-btn{padding:7px 9px;font-size:11px}.header-actions .text-btn svg{width:14px;height:14px}.intro{padding:19px 1px 17px}h1{font-size:33px;letter-spacing:-1.4px}.subtitle{font-size:12px}.layout{display:flex;flex-direction:column;gap:18px}.game-panel{width:100%}.scorebar{margin-bottom:12px;padding:12px 0;border-radius:8px}.stat{padding:0 14px}.stat-number{font-size:26px}.stat:not(:first-child) .stat-number{font-size:22px}.board-frame{padding:6px;border-radius:10px}.board-topline{padding:2px 4px 7px;font-size:8px}.tile{padding:2px}.face{border-radius:6px}.special-badge{width:12px;height:12px;bottom:2px;right:2px}.special-badge svg{width:8px;height:8px}.board-caption{font-size:10px;min-height:27px;padding:5px 4px 0}.controls{gap:7px;margin-top:12px}.control{font-size:11px;padding:11px 3px;gap:6px}.control svg{width:15px;height:15px}.under-board{margin-top:9px;font-size:10px}.sidebar{width:100%;grid-template-columns:1fr;gap:16px}.quest-card{padding:15px 16px;display:grid;grid-template-columns:1fr 146px;column-gap:20px}.card-kicker{grid-column:1}.level-mark{width:22px;height:22px;font-size:11px}.quest-card h2{grid-column:1;margin:8px 0 4px;font-size:22px}.quest-copy{grid-column:1;font-size:10px}.quest-target{grid-column:2;grid-row:1/4;margin:0;gap:10px}.quest-icon{width:44px;height:44px}.quest-icon svg{width:29px;height:29px}.quest-count{font-size:23px}.quest-name{font-size:10px}.quest-card .progress{grid-column:1/-1;margin-top:15px}.quest-bottom{grid-column:1/-1;font-size:9px;margin-top:8px}.notes-card{display:none}.rule-card{padding-top:0;border-top:0;display:grid;grid-template-columns:1fr 1fr;gap:0 22px}.save-line{grid-column:1/-1;justify-content:center;padding-top:12px;margin-top:10px}.footer{margin-top:19px;padding-top:13px;font-size:9px}.footer span:last-child{font-size:11px}.points-pop{font-size:12px;padding:3px 8px}.drawer{width:100%;max-width:430px}.modal-head{padding:20px}.modal-content{padding:19px 20px}.modal-foot{padding:14px 20px 19px}.toast-stack{bottom:16px}.toast{font-size:11px}.tile.sweep .face:before{inset:3px}}
+@media(max-width:370px){.shell{padding:12px 9px}.header-actions{gap:4px}.header-actions .text-btn span{display:none}.stat{padding:0 10px}h1{font-size:29px}.brand-name{font-size:8px}.quest-card{grid-template-columns:1fr 125px;column-gap:10px}.quest-target{gap:7px}.quest-icon{width:36px;height:36px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important}.tile.hinted .face{animation:none;box-shadow:inset 0 0 0 2px #222}.progress>span{transition:none}}
+.reduced-motion .tile.hinted .face{animation:none;box-shadow:inset 0 0 0 2px #222}.reduced-motion .progress>span{transition:none}
+@media(min-width:801px){.shell{max-width:var(--fit-width,1000px)}}
+</style>
+</head>
+<body>
+<div class="shell">
+ <header class="masthead">
+  <a class="brand" href="https://stationantiques.ca/" aria-label="Station Antiques home"><span class="monogram" aria-hidden="true">SA</span><span><span class="brand-name">STATION ANTIQUES</span><span class="brand-place">CHESTER, NOVA SCOTIA</span></span></a>
+  <div class="header-actions">
+   <button class="icon-btn" id="soundBtn" title="Turn sound on" aria-label="Turn sound on" aria-pressed="false"></button>
+   <button class="icon-btn" id="helpBtn" title="How to play" aria-label="How to play"></button>
+   <button class="text-btn" id="settingsBtn"><span data-ui="settings"></span><span>Settings</span></button>
+  </div>
+ </header>
+ <section class="intro" aria-labelledby="title">
+  <div><p class="eyebrow">A little diversion</p><h1 id="title">The Curiosity <span>Cabinet.</span></h1><p class="subtitle">Good finds come in threes. Great finds keep you here.</p></div>
+  <span class="endless-tag"><span data-ui="infinity"></span>Endless by design</span>
+ </section>
+ <main class="layout">
+  <section class="game-panel" aria-label="Match-three game">
+   <div class="scorebar">
+    <div class="stat"><span class="stat-label">Your score</span><span class="stat-number" id="score">0</span></div>
+    <div class="stat" id="bestStat" title="Personal best for these board and scoring rules"><span class="stat-label">Best score</span><span class="stat-number"><span id="best">0</span><span class="record-star" aria-hidden="true"> *</span></span></div>
+    <div class="stat"><span class="stat-label">Moves</span><span class="stat-number" id="moves">0</span></div>
+    <div class="stat"><span class="stat-label">Best chain</span><span class="stat-number" id="bestChain">0<span style="font:12px var(--sans)">x</span></span></div>
+   </div>
+   <div class="board-frame">
+    <div class="board-topline"><span id="boardLabel">THE DRAWER / 8 x 8</span><span id="modeLabel">Classic lines</span></div>
+    <div class="board" id="board" role="grid" aria-label="Curiosity Cabinet. Select a piece, then a neighbour to swap." aria-describedby="playTip" style="--cols:8;--rows:8" data-busy="true"><div class="effects" id="effects" aria-hidden="true"></div><canvas class="fx-canvas" id="particles" aria-hidden="true"></canvas></div>
+    <div class="board-caption"><span id="status" role="status">Opening the drawer...</span><span id="chain"></span></div>
+   </div>
+   <div class="controls">
+    <button class="control primary" id="hintBtn"><span data-ui="hint"></span>Hint</button>
+    <button class="control" id="shuffleBtn"><span data-ui="shuffle"></span>Refresh</button>
+    <button class="control" id="undoBtn" disabled><span data-ui="undo"></span>Undo</button>
+    <button class="control" id="newBtn"><span data-ui="new"></span>New game</button>
+   </div>
+   <p class="under-board" id="playTip">Tap two neighbours or swipe a piece. Match three or more in a line.</p>
+  </section>
+  <aside class="sidebar" aria-label="Collection goals and game rules">
+   <section class="quest-card" id="questCard" aria-labelledby="questTitle">
+    <div class="card-kicker"><span id="exhibitLabel">EXHIBIT 01</span><span class="level-mark" id="levelMark">1</span></div>
+    <h2 id="questTitle">The first discoveries</h2><p class="quest-copy">A small collection. A lovely reward.</p>
+    <div class="quest-target"><span class="quest-icon" id="questIcon" aria-hidden="true"></span><div><div class="quest-count"><span id="questProgress">0</span> <small>/ <span id="questGoal">12</span></small></div><div class="quest-name" id="questName">keys collected</div></div></div>
+    <div class="progress" id="questBar" role="progressbar" aria-label="Collection goal" aria-valuemin="0" aria-valuemax="12" aria-valuenow="0"><span id="questFill"></span></div>
+    <div class="quest-bottom"><span>Complete the exhibit</span><strong id="questReward">+200 points</strong></div>
+   </section>
+   <section class="notes-card" id="powerGuide" aria-label="Special pieces">
+    <h2 class="notes-title">Little things. Big surprises.</h2>
+    <div class="power-guide"><span class="guide-symbol" data-ui="sweep"></span><div class="guide-text"><strong id="sweepGuideTitle">Match 4: cross-sweep</strong>Clears its row and column.</div></div>
+    <div class="power-guide"><span class="guide-symbol" data-ui="burst"></span><div class="guide-text"><strong id="burstGuideTitle">An L or T: little explosion</strong>Clears the surrounding 3 x 3.</div></div>
+    <div class="power-guide"><span class="guide-symbol dark" data-ui="wild"></span><div class="guide-text"><strong id="wildGuideTitle">Match 5: collector's star</strong>Swap to collect every matching icon.</div></div>
+   </section>
+   <section class="rule-card" aria-label="Current game settings">
+    <div class="rule-row"><span>Matching</span><strong id="ruleMatching">Straight lines</strong></div>
+    <div class="rule-row"><span>Diagonals</span><strong id="ruleDiagonals">Off</strong></div>
+    <div class="rule-row"><span>Available swaps</span><strong id="availableMoves">-</strong></div>
+    <div class="rule-row"><span>Pressure</span><strong>Absolutely none</strong></div>
+    <div class="save-line"><span data-ui="save"></span><span id="saveStatus">Progress stays on this device</span></div>
+   </section>
+  </aside>
+ </main>
+ <footer class="footer"><span>STATION ANTIQUES / THE GAMES DRAWER</span><span>No clock. No lives. Just little discoveries.</span></footer>
+</div>
+<div class="overlay" id="settingsOverlay" hidden>
+ <section class="drawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal-head"><div><p class="eyebrow">Make yourself at home</p><h2 id="settingsTitle">Your cabinet.</h2></div><button class="icon-btn" data-close="settingsOverlay" aria-label="Close settings"><span data-ui="close"></span></button></div>
+  <form class="modal-content" id="settingsForm">
+   <section class="settings-section"><h3>Board &amp; rules</h3>
+    <div class="fields">
+     <label class="field"><span>Rows</span><select id="sRows" name="rows"></select></label>
+     <label class="field"><span>Columns</span><select id="sCols" name="cols"></select></label>
+     <label class="field"><span>Icon varieties</span><select id="sKinds" name="kinds"><option value="4">4 / easy company</option><option value="5">5 / a little variety</option><option value="6">6 / the classic mix</option><option value="7">7 / a curious challenge</option><option value="8">8 / a full cabinet</option></select></label>
+     <label class="field"><span>Minimum match</span><select id="sMinimum" name="minimum"><option value="3">3 pieces</option><option value="4">4 pieces</option><option value="5">5 pieces</option></select></label>
+     <label class="field full"><span>Match pattern</span><select id="sPattern" name="pattern"><option value="lines">Classic / straight lines</option><option value="groups">Connected / touching groups</option></select><small>Groups may bend and branch. Lines must be straight and unbroken.</small></label>
+    </div>
+    <label class="toggle-row"><span>Diagonal matches<small>Also match along diagonal lines or corner-touching groups.</small></span><span class="switch"><input type="checkbox" id="sDiagonals" name="diagonals"><i></i></span></label>
+    <label class="toggle-row"><span>Diagonal swaps<small>Allow moving a piece to a diagonal neighbour.</small></span><span class="switch"><input type="checkbox" id="sDiagonalSwaps" name="diagonalSwaps"><i></i></span></label>
+    <label class="toggle-row"><span>Free swapping<small>Keep swaps even when they do not make a match.</small></span><span class="switch"><input type="checkbox" id="sFreeSwaps" name="freeSwaps"><i></i></span></label>
+    <label class="toggle-row"><span>Special pieces<small>Long matches create sweeps, bursts, and collector's stars.</small></span><span class="switch"><input type="checkbox" id="sSpecials" name="specials"><i></i></span></label>
+   </section>
+   <section class="settings-section"><h3>Counting your finds</h3>
+    <div class="fields"><label class="field full"><span>Points per collected piece</span><select id="sPoints" name="points"><option value="5">5 points</option><option value="10">10 points</option><option value="25">25 points</option><option value="50">50 points</option></select></label></div>
+    <label class="toggle-row"><span>Cascade multipliers<small>Chain reactions earn x2, x3, and so on, up to x10.</small></span><span class="switch"><input type="checkbox" id="sMultipliers" name="multipliers"><i></i></span></label>
+    <label class="toggle-row"><span>Collection goals<small>Endless little exhibits with bonus points for completion.</small></span><span class="switch"><input type="checkbox" id="sQuests" name="quests"><i></i></span></label>
+    <p class="field-note">Personal bests are kept separately for each combination of board and scoring rules.</p>
+   </section>
+   <section class="settings-section"><h3>Feel &amp; finish</h3>
+    <div class="range-field"><label class="range-head" for="sSpeed"><span>Animation speed</span><output id="speedOutput">1.0x</output></label><input type="range" id="sSpeed" name="speed" min="0.5" max="2.5" step="0.1" value="1"></div>
+    <label class="toggle-row"><span>Little celebrations<small>Ink-like particles and special-piece effects.</small></span><span class="switch"><input type="checkbox" id="sParticles" name="particles"><i></i></span></label>
+    <label class="toggle-row"><span>Quiet mode for motion<small>Short fades instead of movement. Respects system settings too.</small></span><span class="switch"><input type="checkbox" id="sReducedMotion" name="reducedMotion"><i></i></span></label>
+    <label class="toggle-row"><span>Gentle sound effects<small>Synthesized chimes. No music, audio files, or downloads.</small></span><span class="switch"><input type="checkbox" id="sSound" name="sound"><i></i></span></label>
+    <div class="range-field"><label class="range-head" for="sVolume"><span>Sound volume</span><output id="volumeOutput">30%</output></label><input type="range" id="sVolume" name="volume" min="0" max="1" step="0.05" value="0.3"></div>
+    <label class="toggle-row"><span>A helpful nudge<small>Gently highlight a possible match after 15 quiet seconds.</small></span><span class="switch"><input type="checkbox" id="sAutoHints" name="autoHints"><i></i></span></label>
+    <label class="toggle-row"><span>Names on the pieces<small>Add small labels beneath the icons.</small></span><span class="switch"><input type="checkbox" id="sLabels" name="labels"><i></i></span></label>
+   </section>
+   <section class="settings-section"><h3>Your saved cabinet</h3><p class="field-note">The game saves after every turn. Export a copy to move it between browsers or devices. Saves and scores stay private in this browser.</p><div class="save-tools"><button type="button" class="text-btn" id="exportBtn">Export save</button><button type="button" class="text-btn" id="importBtn">Import save</button></div><button class="reset-link" id="defaultsBtn" type="button">Restore default settings</button></section>
+  </form>
+  <div class="modal-foot"><p class="field-note" id="settingsNotice">Feel and finish can change without losing your game.</p><button class="solid-btn wide" id="applyBtn">Apply settings</button></div>
+ </section>
+</div>
+<div class="overlay center-overlay" id="helpOverlay" hidden>
+ <section class="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="modal-head"><div><p class="eyebrow">Welcome to the drawer</p><h2 id="helpTitle">A very good find.</h2></div><button class="icon-btn" data-close="helpOverlay" aria-label="Close instructions"><span data-ui="close"></span></button></div>
+  <div class="modal-content">
+   <h3>A little rearranging works wonders.</h3><p>Tap a piece, then an adjacent piece to swap them. You can also swipe a piece toward its neighbour. Match at least <strong id="helpMinimum">three</strong> identical icons to collect them. Pieces fall into the gaps, and fresh finds arrive from above.</p><div class="help-example" id="helpExample" aria-hidden="true"></div>
+   <p id="helpRules">By default, matches are horizontal or vertical straight lines. Unsuccessful swaps slide back without costing a move.</p>
+   <h3>Look for something special.</h3><ul id="helpSpecials"><li>Longer matches create special pieces.</li></ul>
+   <h3>There is no closing time.</h3><p id="helpScoring">Chain reactions multiply your points. Complete the current exhibit for a bonus and a fresh collection goal. There are no lives, deadlines, or last levels.</p><p><strong>Hint</strong> highlights a scoring swap. <strong>Refresh</strong> deals fresh icons while keeping your score and special pieces. If no scoring swaps remain, the game refreshes itself. <strong>Undo</strong> rewinds up to eight turns or refreshes, including their scores and goals.</p>
+   <div class="help-tip"><strong>Keyboard:</strong> use arrow keys to move focus. Enter or Space selects a piece; select a neighbour to swap. Shift + an arrow swaps directly. Escape clears your selection. The game saves after every completed turn.</div>
+  </div>
+  <div class="modal-foot"><button class="solid-btn wide" data-close="helpOverlay">Open the drawer</button></div>
+ </section>
+</div>
+<div class="overlay center-overlay" id="newOverlay" hidden>
+ <section class="help-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="newTitle">
+  <div class="modal-head"><div><p class="eyebrow">Fresh beginnings</p><h2 id="newTitle">A new collection?</h2></div><button class="icon-btn" data-close="newOverlay" aria-label="Cancel new game"><span data-ui="close"></span></button></div>
+  <div class="modal-content"><p>Your current score and exhibit will start over. Your personal best and all your settings will stay.</p></div><div class="confirm-actions"><button class="text-btn" data-close="newOverlay">Keep playing</button><button class="solid-btn" id="confirmNewBtn">Start fresh</button></div>
+ </section>
+</div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+<div class="toast-stack" id="toasts" aria-live="polite"></div>
+<div class="visually-hidden" id="announcer" aria-live="polite" aria-atomic="true"></div>
+<noscript><p style="padding:20px;text-align:center">Please enable JavaScript to open the Curiosity Cabinet.</p></noscript>
+<script>
+/* The Curiosity Cabinet, Station Antiques. Single-file, dependency-free edition.
+   All object art is inline SVG; sound is synthesized with Web Audio.
+   Board coordinates are [row, column]. Animation never determines game logic.
+   A settled board has no matches and at least one scoring swap. */
+(() => {
+'use strict';
+const VERSION=1, STORAGE='stationAntiques.curiosityCabinet.v1';
+const $=id=>document.getElementById(id);
+const DEFAULTS={rows:8,cols:8,kinds:6,minimum:3,pattern:'lines',diagonals:false,diagonalSwaps:false,freeSwaps:false,specials:true,points:10,multipliers:true,quests:true,speed:1,particles:true,reducedMotion:false,sound:false,volume:.3,autoHints:false,labels:false};
+const RULE_KEYS=['rows','cols','kinds','minimum','pattern','diagonals','diagonalSwaps','freeSwaps','specials','points','multipliers','quests'];
+const ORTHO=[[0,1],[1,0],[0,-1],[-1,0]], DIAG=[[1,1],[1,-1],[-1,1],[-1,-1]];
+const OBJECTS=[
+ {name:'Key',plural:'keys',art:'<circle cx="18" cy="18" r="9"/><circle cx="18" cy="18" r="2.4" fill="currentColor" stroke="none"/><path d="M24.5 24.5 45 45m-7-7 5-5m-1 9 5-5"/>'},
+ {name:'Teapot',plural:'teapots',art:'<path d="M17 26h25c2 8 2 19-11 19S16 34 17 26Zm1 6C10 31 10 20 6 21c1 10 2 18 13 19m23-11c14-5 15 13 0 11M21 23h17m-13-3c0-5 10-5 10 0M24 46h14"/>'},
+ {name:'Clock',plural:'clocks',art:'<path d="M19 8h18v5H19zm3 5v6m12-6v6M19 45v5m18-5v5"/><circle cx="28" cy="32" r="15"/><path d="M28 21v11l7 4m-7-18v2m14 12h-2M28 46v-2M14 32h2"/>'},
+ {name:'Book',plural:'books',art:'<path d="M16 9h26v34H17a5 5 0 0 0 0 10h26M16 9a5 5 0 0 0-5 5v34m6-39v34m0 5h24m-2-5v10M23 18h12m-12 6h12m-12 6h8"/>'},
+ {name:'Vase',plural:'vases',art:'<path d="M22 8h12m-11 1c0 12 3 12-5 23-6 9-2 18 10 18s16-9 10-18c-8-11-5-11-5-23M20 30h16M17 37h22M19 44h18"/><path d="M26 9h4v7h-4z" fill="currentColor" stroke="none"/>'},
+ {name:'Candle',plural:'candles',art:'<path d="M25 20h7v21h-7zm3.5-14c-8 9-4 13 0 13s8-4 0-13ZM18 42h21m-16 0c0 6-5 5-5 9h21c0-4-7-3-7-9M25 25h7"/>'},
+ {name:'Bell',plural:'bells',art:'<path d="M12 40c7-6 4-22 16-22s9 16 16 22H12zm-3 5h38M24 49c0 5 8 5 8 0M26 12a3 3 0 1 1 4 0v6h-4zM20 34c0-6 1-9 4-11"/>'},
+ {name:'Goblet',plural:'goblets',art:'<path d="M17 8h22l-2 14c-1 6-5 9-9 9s-8-3-9-9L17 8Zm2 10h18M28 31v13m-10 6c0-5 20-5 20 0H18zm4-37v6"/>'}
+];
+const UI={
+ settings:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--paper)"/><circle cx="15" cy="12" r="2" fill="var(--paper)"/><circle cx="8" cy="18" r="2" fill="var(--paper)"/>',
+ close:'<path d="m6 6 12 12M18 6 6 18"/>',help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .6-1.5 1-1.5 2m0 3h.01"/>',
+ sound:'<path d="m4 10 4 0 5-4v12l-5-4H4zM16 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/>',mute:'<path d="m3 10 4 0 5-4v12l-5-4H3zM17 9l5 6m0-6-5 6"/>',
+ hint:'<path d="M8 15c-7-6-1-14 4-12 7-1 9 7 4 12l-1 3H9zM10 22h4M12 6v4"/>',shuffle:'<path d="M3 6h3c5 0 7 12 12 12h3m-4-4 4 4-4 4M3 18h3c2 0 4-3 6-6s3-6 6-6h3m-4-4 4 4-4 4"/>',
+ undo:'<path d="M4 10h10a6 6 0 1 1 0 12m-6-16-4 4 4 4" transform="translate(0 -2)"/>',new:'<path d="M12 4v16M4 12h16"/>',infinity:'<path d="M12 12c-3-5-4-6-6-6a6 6 0 0 0 0 12c3 0 5-4 6-6s3-6 6-6a6 6 0 0 1 0 12c-3 0-5-4-6-6Z"/>',
+ sweep:'<path d="M12 3v18M3 12h18M9 6l3-3 3 3m-6 12 3 3 3-3M6 9l-3 3 3 3m12-6 3 3-3 3"/>',burst:'<path d="m12 2 2 6 6-3-3 6 5 3-7 1 1 7-5-5-5 4 2-7-6-3 7-2z"/>',
+ wild:'<path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/><path d="m19 3 .5 1.5L21 5l-1.5.5L19 7l-.5-1.5L17 5l1.5-.5z" fill="currentColor" stroke="none"/>',
+ save:'<path d="m5 12 4 4L19 6"/><path d="M20 13v6H4V3h12"/>'
+};
+function ui(name,cls=''){return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${UI[name]||''}</svg>`;}
+function objectSVG(type,cls='object-icon'){return type<0?ui('wild',cls):`<svg class="${cls}" viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${OBJECTS[type].art}</svg>`;}
+document.querySelectorAll('[data-ui]').forEach(el=>el.innerHTML=ui(el.dataset.ui));
+$('helpBtn').innerHTML=ui('help');
+let config={...DEFAULTS}, board=[], score=0, moves=0, bestChain=0, totalCollected=0;
+let quest={level:1,type:0,goal:12,progress:0}, records={}, history=[], rng=0x12345678, nextId=1;
+let busy=true, selected=null, focused=[0,0], possibleMoves=[], activeOverlay=null, previousFocus=null;
+let lastAction=performance.now(), hintTimer=0, scoreRAF=0, shownScore=0, storageOK=true, turnGained=0;
+const tileElements=new Map(), boardEl=$('board'), effects=$('effects');
+const motionPreference=window.matchMedia('(prefers-reduced-motion: reduce)');
+const reduceMotion=()=>config.reducedMotion||motionPreference.matches;
+const clone=x=>JSON.parse(JSON.stringify(x));
+const format=n=>Math.floor(n).toLocaleString();
+const compactNumber=new Intl.NumberFormat(undefined,{notation:'compact',maximumFractionDigits:1});
+const statFormat=n=>n>=1000000?compactNumber.format(Math.floor(n)):format(n);
+const key=(r,c)=>r*config.cols+c, unpack=k=>[Math.floor(k/config.cols),k%config.cols];
+const inside=(r,c)=>r>=0&&c>=0&&r<config.rows&&c<config.cols;
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,reduceMotion()?Math.min(ms,25):ms/config.speed));
+function random(){rng=(rng+0x6D2B79F5)>>>0;let t=rng;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;}
+function rand(n){return Math.floor(random()*n);}
+function shuffled(array){const a=[...array];for(let i=a.length-1;i>0;i--){const j=rand(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function seedRandom(){const a=new Uint32Array(1);if(window.crypto?.getRandomValues)crypto.getRandomValues(a);else a[0]=Date.now()^Math.floor(Math.random()*0xffffffff);rng=a[0]>>>0;}
+const ruleKey=(c=config)=>RULE_KEYS.map(k=>`${k}:${c[k]}`).join('|');
+function best(){return records[ruleKey()]||0;}
+function noteRecord(){if(score>best())records[ruleKey()]=score;}
+function tile(type,special=null){return {id:nextId++,type,special};}
+function neighbourDirections(){return config.diagonals?[...ORTHO,...DIAG]:ORTHO;}
+function lineDirections(){return config.diagonals?[[0,1],[1,0],[1,1],[1,-1]]:[[0,1],[1,0]];}
+function swapDirections(){return config.diagonalSwaps?[[0,1],[1,0],[1,1],[1,-1]]:[[0,1],[1,0]];}
+function adjacent(a,b){const dr=Math.abs(a[0]-b[0]),dc=Math.abs(a[1]-b[1]);return config.diagonalSwaps?Math.max(dr,dc)===1:dr+dc===1;}
+function same(b,r,c,type){return inside(r,c)&&b[r][c]!==null&&b[r][c].type===type;}
+/* Local match detection makes move enumeration and constrained generation cheap. */
+function makesMatch(b,r,c){
+ const t=b[r]?.[c];if(!t||t.type<0)return false;
+ if(config.pattern==='groups'){
+  const seen=new Set([key(r,c)]),stack=[[r,c]],dirs=neighbourDirections();
+  while(stack.length){const [rr,cc]=stack.pop();for(const [dr,dc] of dirs){const nr=rr+dr,nc=cc+dc,k=key(nr,nc);if(same(b,nr,nc,t.type)&&!seen.has(k)){seen.add(k);if(seen.size>=config.minimum)return true;stack.push([nr,nc]);}}}return false;
+ }
+ for(const [dr,dc] of lineDirections()){
+  let count=1;for(const sign of [-1,1]){let nr=r+dr*sign,nc=c+dc*sign;while(same(b,nr,nc,t.type)){count++;nr+=dr*sign;nc+=dc*sign;}}
+  if(count>=config.minimum)return true;
+ }return false;
+}
+function findMatches(b=board){
+ const found=[];
+ if(config.pattern==='groups'){
+  const visited=new Set(),dirs=neighbourDirections();
+  for(let r=0;r<config.rows;r++)for(let c=0;c<config.cols;c++){
+   const t=b[r][c],k=key(r,c);if(!t||t.type<0||visited.has(k))continue;
+   const cells=[k],stack=[[r,c]];visited.add(k);
+   while(stack.length){const [rr,cc]=stack.pop();for(const [dr,dc]of dirs){const nr=rr+dr,nc=cc+dc,nk=key(nr,nc);if(same(b,nr,nc,t.type)&&!visited.has(nk)){visited.add(nk);cells.push(nk);stack.push([nr,nc]);}}}
+   if(cells.length>=config.minimum)found.push({cells,dir:'group'});
+  }
+ }else{
+  for(const [dr,dc]of lineDirections())for(let r=0;r<config.rows;r++)for(let c=0;c<config.cols;c++){
+   const t=b[r][c];if(!t||t.type<0||same(b,r-dr,c-dc,t.type))continue;
+   const cells=[];let nr=r,nc=c;while(same(b,nr,nc,t.type)){cells.push(key(nr,nc));nr+=dr;nc+=dc;}
+   if(cells.length>=config.minimum)found.push({cells,dir:`${dr},${dc}`});
+  }
+ }return found;
+}
+function exchange(b,a,z){[b[a[0]][a[1]],b[z[0]][z[1]]]=[b[z[0]][z[1]],b[a[0]][a[1]]];}
+function scoringSwap(b,a,z){
+ const ta=b[a[0]][a[1]],tb=b[z[0]][z[1]];
+ if(!ta||!tb)return false;
+ if(ta.special==='wild'||tb.special==='wild'||(ta.special&&tb.special))return true;
+ if(ta.type===tb.type)return false;
+ exchange(b,a,z);const valid=makesMatch(b,...a)||makesMatch(b,...z);exchange(b,a,z);return valid;
+}
+function findMoves(b=board,firstOnly=false){
+ const found=[];for(let r=0;r<config.rows;r++)for(let c=0;c<config.cols;c++)for(const [dr,dc]of swapDirections()){
+  const a=[r,c],z=[r+dr,c+dc];if(inside(...z)&&scoringSwap(b,a,z)){found.push({a,z});if(firstOnly)return found;}
+ }return found;
+}
+/* Seed one legal swap, then fill around it with bounded backtracking.
+   This works even for five-piece matches on small, eight-icon boards. */
+function generateBoard(){
+ const allTypes=Array.from({length:config.kinds},(_,i)=>i);
+ for(let attempt=0;attempt<80;attempt++){
+  const b=Array.from({length:config.rows},()=>Array(config.cols).fill(null));
+  const n=config.minimum,type=rand(config.kinds),other=(type+1+rand(config.kinds-1))%config.kinds;
+  const transpose=random()<.5,flipR=random()<.5,flipC=random()<.5;
+  const virtualRows=transpose?config.cols:config.rows,virtualCols=transpose?config.rows:config.cols;
+  const shape=config.pattern==='groups'?{h:n-1,w:3}:{h:n,w:2};
+  const offsetR=rand(virtualRows-shape.h+1),offsetC=rand(virtualCols-shape.w+1);
+  const transform=(r,c)=>{r+=offsetR;c+=offsetC;if(transpose)[r,c]=[c,r];return[flipR?config.rows-1-r:r,flipC?config.cols-1-c:c];};
+  const put=(r,c,t)=>{const [rr,cc]=transform(r,c);b[rr][cc]=tile(t);};
+  if(config.pattern==='groups'){
+   for(let r=0;r<n-1;r++)put(r,0,type);
+   const middle=Math.floor((n-2)/2);put(middle,1,other);put(middle,2,type);
+  }else{
+   for(let r=0;r<n-1;r++)put(r,0,type);put(n-1,0,other);put(n-1,1,type);
+  }
+  const empty=[];for(let r=0;r<config.rows;r++)for(let c=0;c<config.cols;c++)if(!b[r][c])empty.push([r,c]);
+  let operations=0;
+  function fill(i){
+   if(i===empty.length)return true;if(++operations>22000)return false;
+   const [r,c]=empty[i];for(const t of shuffled(allTypes)){
+    b[r][c]={id:0,type:t,special:null};if(!makesMatch(b,r,c)&&fill(i+1))return true;
+   }b[r][c]=null;return false;
+  }
+  if(fill(0)&&findMatches(b).length===0&&findMoves(b,true).length){
+   for(const row of b)for(const t of row)if(t.id===0)t.id=nextId++;
+   return b;
+  }
+ }
+ throw new Error('Could not prepare this drawer. Try more icon varieties or a larger minimum match.');
+}
+function carrySpecials(fresh,old){
+ const specials=old.flat().filter(t=>t&&t.special);
+ const spots=shuffled(Array.from({length:config.rows*config.cols},(_,i)=>i));
+ specials.forEach((t,i)=>{if(i>=spots.length)return;const [r,c]=unpack(spots[i]);fresh[r][c].special=t.special;if(t.special==='wild')fresh[r][c].type=-1;});
+ return fresh;
+}
+function snapshot(){return {board:clone(board),score,moves,bestChain,totalCollected,quest:clone(quest),rng,nextId};}
+function restore(s){board=clone(s.board);score=s.score;moves=s.moves;bestChain=s.bestChain;totalCollected=s.totalCollected;quest=clone(s.quest);rng=s.rng>>>0;nextId=s.nextId;}
+function remember(s=snapshot()){history.push(s);if(history.length>8)history.shift();}
+function payload(){return {version:VERSION,config:{...config},state:snapshot(),records:{...records},history:clone(history),savedAt:new Date().toISOString()};}
+function save(){
+ try{localStorage.setItem(STORAGE,JSON.stringify(payload()));storageOK=true;}catch(e){storageOK=false;}
+ $('saveStatus').textContent=storageOK?'Saved on this device':'Local saving unavailable in this browser';
+}
+function validConfig(raw){
+ if(!raw||typeof raw!=='object')throw new Error('Missing game settings.');const c={...DEFAULTS};
+ for(const k of Object.keys(c)){
+  if(raw[k]===undefined)continue;
+  if(typeof c[k]==='boolean'){if(typeof raw[k]!=='boolean')throw new Error('Invalid setting.');c[k]=raw[k];}
+  else if(typeof c[k]==='number'){if(typeof raw[k]!=='number'||!Number.isFinite(raw[k]))throw new Error('Invalid numeric setting.');c[k]=raw[k];}
+  else c[k]=raw[k];
+ }
+ for(const k of ['rows','cols'])if(!Number.isInteger(c[k])||c[k]<5||c[k]>12)throw new Error('Board dimensions must be 5 to 12.');
+ if(!Number.isInteger(c.kinds)||c.kinds<4||c.kinds>8||![3,4,5].includes(c.minimum)||!['lines','groups'].includes(c.pattern)||![5,10,25,50].includes(c.points))throw new Error('Invalid game rules.');
+ if(c.speed<.5||c.speed>2.5||c.volume<0||c.volume>1)throw new Error('Invalid sound or animation setting.');
+ return c;
+}
+function validState(s,c){
+ if(!s||!Array.isArray(s.board)||s.board.length!==c.rows)throw new Error('Invalid board.');const ids=new Set();
+ for(const row of s.board){if(!Array.isArray(row)||row.length!==c.cols)throw new Error('Invalid board width.');for(const t of row){
+  if(!t||!Number.isSafeInteger(t.id)||t.id<1||ids.has(t.id)||!Number.isInteger(t.type)||t.type< -1||t.type>=c.kinds||![null,'sweep','burst','wild'].includes(t.special))throw new Error('Invalid piece.');
+  if((t.special==='wild')!==(t.type===-1)||(!c.specials&&t.special))throw new Error('Invalid special piece.');ids.add(t.id);
+ }}
+ for(const k of ['score','moves','bestChain','totalCollected','rng','nextId'])if(!Number.isSafeInteger(s[k])||s[k]<0)throw new Error('Invalid score or game state.');
+ if(s.rng>0xffffffff||s.nextId<=Math.max(...ids))throw new Error('Invalid generator state.');
+ const q=s.quest;if(!q||!Number.isSafeInteger(q.level)||q.level<1||!Number.isInteger(q.type)||q.type<0||q.type>=c.kinds||!Number.isSafeInteger(q.goal)||q.goal!==questGoal(q.level)||!Number.isSafeInteger(q.progress)||q.progress<0||q.progress>=q.goal)throw new Error('Invalid collection goal.');
+ return {board:s.board.map(row=>row.map(t=>({id:t.id,type:t.type,special:t.special}))),score:s.score,moves:s.moves,bestChain:s.bestChain,totalCollected:s.totalCollected,quest:{level:q.level,type:q.type,goal:q.goal,progress:q.progress},rng:s.rng,nextId:s.nextId};
+}
+function validatePayload(p){
+ if(!p||p.version!==VERSION)throw new Error('This is not a compatible Curiosity Cabinet save.');
+ const c=validConfig(p.config),s=validState(p.state,c);const h=Array.isArray(p.history)?p.history.slice(-8).map(x=>validState(x,c)):[];
+ const rec={};if(p.records&&typeof p.records==='object')for(const [k,v]of Object.entries(p.records).slice(0,300))if(k.startsWith('rows:')&&k.length<350&&Number.isSafeInteger(v)&&v>=0)rec[k]=v;
+ return {config:c,state:s,history:h,records:rec};
+}
+function animate(el,frames,ms=220,options={}){
+ if(!el)return Promise.resolve();const duration=reduceMotion()?Math.min(ms,55):ms/config.speed;
+ try{return el.animate(frames,{duration,easing:'cubic-bezier(.2,.75,.25,1)',...options}).finished.catch(()=>{});}catch(e){return Promise.resolve();}
+}
+const position=(r,c)=>`translate(${c*100}%,${r*100}%)`;
+function tileHTML(t){return objectSVG(t.type)+(t.special&&t.special!=='wild'?`<span class="special-badge">${ui(t.special)}</span>`:'')+(config.labels?`<span class="object-label">${t.type<0?'Star':OBJECTS[t.type].name}</span>`:'');}
+function updateTile(el,t,r,c){
+ el.className=`tile${t.special?' '+t.special:''}`;el.dataset.row=r;el.dataset.col=c;el.dataset.id=t.id;
+ el.setAttribute('aria-label',`${t.type<0?"Collector's star":OBJECTS[t.type].name}${t.special&&t.special!=='wild'?', '+t.special:''}, row ${r+1}, column ${c+1}`);
+ el.setAttribute('aria-selected','false');el.tabIndex=r===focused[0]&&c===focused[1]?0:-1;
+ el.setAttribute('aria-rowindex',r+1);el.setAttribute('aria-colindex',c+1);
+ const face=el.firstElementChild;if(face.dataset.signature!==`${t.type}|${t.special}|${config.labels}`){face.innerHTML=tileHTML(t);face.dataset.signature=`${t.type}|${t.special}|${config.labels}`;}
+}
+function makeTile(t,r,c){const el=document.createElement('button');el.type='button';el.setAttribute('role','gridcell');el.innerHTML='<span class="face"></span>';updateTile(el,t,r,c);el.style.transform=position(r,c);boardEl.insertBefore(el,effects);tileElements.set(t.id,el);return el;}
+function renderBoard(){
+ for(const el of tileElements.values())el.remove();tileElements.clear();
+ boardEl.style.setProperty('--cols',config.cols);boardEl.style.setProperty('--rows',config.rows);
+ boardEl.setAttribute('aria-rowcount',config.rows);boardEl.setAttribute('aria-colcount',config.cols);
+ boardEl.classList.toggle('labels-on',config.labels);boardEl.classList.toggle('compact',config.cols>=10||config.rows>=10);
+ focused=[Math.min(focused[0],config.rows-1),Math.min(focused[1],config.cols-1)];
+ board.forEach((row,r)=>row.forEach((t,c)=>makeTile(t,r,c)));fitLayout();resizeCanvas();
+}
+// Keep the entire drawer and its controls in view on desktop displays.
+function fitLayout(){
+ const root=document.documentElement;
+ if(innerWidth<=800){root.style.removeProperty('--fit-width');boardEl.style.maxWidth='';return;}
+ const narrowHeight=innerHeight<=850,large=innerWidth>=1300&&innerHeight>=900;
+ const side=narrowHeight?250:large?285:272,gap=narrowHeight?23:large?32:26;
+ const top=boardEl.getBoundingClientRect().top+window.scrollY;
+ const boardHeight=Math.max(265,innerHeight-top-145);
+ boardEl.style.maxWidth=`${Math.max(160,boardHeight*(config.cols/config.rows))}px`;
+ const desired=boardHeight*(config.cols/config.rows)+20+side+gap+80;
+ root.style.setProperty('--fit-width',`${Math.min(1120,Math.max(690,desired))}px`);
+}
+window.addEventListener('resize',()=>{fitLayout();resizeCanvas();});
+function resetEffects(clearToasts=false){
+ effects.replaceChildren();particleList=[];cancelAnimationFrame(particleRAF);particleRAF=0;ctx?.clearRect(0,0,canvasW,canvasH);
+ if(clearToasts)$('toasts').replaceChildren();
+}
+function syncTiles(){board.forEach((row,r)=>row.forEach((t,c)=>{const el=tileElements.get(t.id);if(el){updateTile(el,t,r,c);el.style.transform=position(r,c);}}));}
+function lock(value){busy=value;boardEl.dataset.busy=String(value);boardEl.setAttribute('aria-busy',String(value));for(const id of ['hintBtn','shuffleBtn','newBtn','settingsBtn'])$(id).disabled=value;$('undoBtn').disabled=value||!history.length;}
+function status(text,chain=''){$('status').textContent=text;$('chain').textContent=chain;}
+function clearHints(){clearTimeout(hintTimer);for(const el of tileElements.values())el.classList.remove('hinted');}
+function clearSelection(){if(selected){const t=board[selected[0]]?.[selected[1]],el=t&&tileElements.get(t.id);if(el){el.classList.remove('selected');el.setAttribute('aria-selected','false');}}selected=null;}
+function interact(){lastAction=performance.now();clearHints();}
+function focusCell(r,c,focus=true){if(!inside(r,c))return;focused=[r,c];for(const el of tileElements.values())el.tabIndex=Number(el.dataset.row)===r&&Number(el.dataset.col)===c?0:-1;if(focus)tileElements.get(board[r][c].id)?.focus({preventScroll:true});}
+function selectCell(r,c){
+ if(busy||activeOverlay||!inside(r,c))return;interact();soundUnlock();focusCell(r,c,false);
+ if(selected&&selected[0]===r&&selected[1]===c){clearSelection();return;}
+ if(selected&&adjacent(selected,[r,c])){const a=[...selected];clearSelection();void playSwap(a,[r,c]);return;}
+ clearSelection();selected=[r,c];const el=tileElements.get(board[r][c].id);el.classList.add('selected');el.setAttribute('aria-selected','true');
+}
+function animateScore(immediate=false){
+ cancelAnimationFrame(scoreRAF);const start=shownScore,target=score;if(immediate||reduceMotion()){shownScore=target;$('score').textContent=statFormat(target);return;}
+ const begin=performance.now();function frame(now){const t=Math.min(1,(now-begin)/380);shownScore=start+(target-start)*(1-Math.pow(1-t,3));$('score').textContent=statFormat(shownScore);if(t<1)scoreRAF=requestAnimationFrame(frame);}scoreRAF=requestAnimationFrame(frame);
+}
+const QUEST_NAMES=['The first discoveries','A shelf of stories','A splendid assortment','Worth a closer look','Treasures, together','An eye for the unusual','The next great find','A collection to keep'];
+function questGoal(level){return 12+Math.min(level-1,24)*2;}
+function questReward(){return (20+(quest.level-1)*5)*config.points;}
+function updateQuest(){
+ $('questCard').hidden=!config.quests;
+ $('exhibitLabel').textContent=`EXHIBIT ${String(quest.level).padStart(2,'0')}`;$('levelMark').textContent=quest.level;
+ $('questTitle').textContent=QUEST_NAMES[(quest.level-1)%QUEST_NAMES.length];$('questIcon').innerHTML=objectSVG(quest.type);
+ $('questProgress').textContent=quest.progress;$('questGoal').textContent=quest.goal;$('questName').textContent=`${OBJECTS[quest.type].plural} collected`;
+ $('questFill').style.width=`${quest.progress/quest.goal*100}%`;$('questReward').textContent=`+${format(questReward())} points`;
+ $('questBar').setAttribute('aria-valuemax',quest.goal);$('questBar').setAttribute('aria-valuenow',quest.progress);
+ $('questBar').setAttribute('aria-label',`${OBJECTS[quest.type].plural} collected`);
+}
+function updateUI(immediate=false){
+ noteRecord();animateScore(immediate);$('best').textContent=statFormat(best());$('moves').textContent=statFormat(moves);$('score').title=format(score)+' points';$('best').title=format(best())+' points';$('moves').title=format(moves)+' moves';$('bestChain').innerHTML=`${bestChain}<span style="font:12px var(--sans)">x</span>`;
+ $('bestStat').classList.toggle('new-record',score>0&&score>=best());
+ $('boardLabel').textContent=`THE DRAWER / ${config.rows} x ${config.cols}`;
+ $('modeLabel').textContent=`${config.pattern==='lines'?'Classic lines':'Connected groups'}${config.diagonals?' + diagonals':''}`;
+ $('ruleMatching').textContent=`${config.minimum}+ ${config.pattern==='lines'?'in a line':'touching'}`;
+ $('ruleDiagonals').textContent=config.diagonals?(config.diagonalSwaps?'Match & swap':'Matches only'):(config.diagonalSwaps?'Swaps only':'Off');
+ $('availableMoves').textContent=possibleMoves.length;
+ $('playTip').textContent=`Tap two neighbours or swipe a piece. Match ${config.minimum}+ ${config.pattern==='lines'?'in a line':'in a touching group'}.`;
+ $('powerGuide').hidden=!config.specials;
+ $('sweepGuideTitle').textContent=`Match ${config.minimum+1}: cross-sweep`;
+ $('burstGuideTitle').textContent=config.pattern==='lines'?"An L or T: little explosion":`Match ${config.minimum+2}: little explosion`;
+ $('wildGuideTitle').textContent=`Match ${config.minimum+(config.pattern==='lines'?2:3)}: collector's star`;
+ document.body.classList.toggle('reduced-motion',reduceMotion());updateSoundButton();updateQuest();
+}
+function collectGoal(cleared){
+ totalCollected+=cleared.length;if(!config.quests)return;
+ quest.progress+=cleared.filter(t=>t.type===quest.type).length;
+ if(quest.progress>=quest.goal){
+  const reward=questReward(),level=quest.level;score+=reward;turnGained+=reward;
+  const oldType=quest.type;quest={level:level+1,type:(oldType+1+rand(config.kinds-1))%config.kinds,goal:questGoal(level+1),progress:0};
+  toast(`Exhibit ${level} complete. +${format(reward)} points.`,"A collection worth keeping.");playSound('quest',level);
+  const card=$('questCard');card.classList.remove('quest-reward-flash');void card.offsetWidth;card.classList.add('quest-reward-flash');
+ }
+}
+/* Specials are planned before board mutation. Overlapping lines form one match. */
+function matchComponents(matches){
+ const comps=[];for(const m of matches){let comp={cells:new Set(m.cells),lines:[m]};for(let i=comps.length-1;i>=0;i--){if([...comps[i].cells].some(k=>comp.cells.has(k))){for(const k of comps[i].cells)comp.cells.add(k);comp.lines.push(...comps[i].lines);comps.splice(i,1);}}comps.push(comp);}return comps;
+}
+function planClear(matches,forced,preferred){
+ const cells=new Set(forced||[]),spawns=new Map(),fires=[];
+ for(const m of matches)for(const k of m.cells)cells.add(k);
+ if(config.specials)for(const comp of matchComponents(matches)){
+  const longest=Math.max(...comp.lines.map(l=>l.cells.length));let special=null;
+  if(config.pattern==='groups'){if(longest>=config.minimum+3)special='wild';else if(longest>=config.minimum+2)special='burst';else if(longest>=config.minimum+1)special='sweep';}
+  else if(longest>=config.minimum+2)special='wild';else if(new Set(comp.lines.map(l=>l.dir)).size>1)special='burst';else if(longest>=config.minimum+1)special='sweep';
+  if(special){const candidates=[...comp.cells].filter(k=>{const [r,c]=unpack(k);return !board[r][c].special;});if(candidates.length){const anchor=(preferred||[]).find(k=>candidates.includes(k))??candidates[Math.floor(candidates.length/2)];spawns.set(anchor,special);}}
+ }
+ const activated=new Set(),powerHit=new Set(),queue=[...cells];
+ function add(r,c){if(!inside(r,c))return;const k=key(r,c);powerHit.add(k);if(!cells.has(k)){cells.add(k);queue.push(k);}}
+ for(let i=0;i<queue.length;i++){
+  const k=queue[i],[r,c]=unpack(k),t=board[r][c];if(!t?.special||activated.has(t.id))continue;activated.add(t.id);fires.push({r,c,special:t.special});
+  if(t.special==='sweep'){for(let cc=0;cc<config.cols;cc++)add(r,cc);for(let rr=0;rr<config.rows;rr++)add(rr,c);}
+  else if(t.special==='burst'){for(let rr=r-1;rr<=r+1;rr++)for(let cc=c-1;cc<=c+1;cc++)add(rr,cc);}
+  else if(t.special==='wild'){
+   // Direct star swaps already supply their complete, colour-specific clear set.
+   if(forced&&forced.includes(k))continue;
+   const counts=Array(config.kinds).fill(0);board.flat().forEach(p=>{if(p.type>=0)counts[p.type]++;});const target=counts.indexOf(Math.max(...counts));
+   for(let rr=0;rr<config.rows;rr++)for(let cc=0;cc<config.cols;cc++)if(board[rr][cc].type===target)add(rr,cc);
+  }
+ }
+ for(const k of powerHit)spawns.delete(k);
+ return {cells,spawns,fires};
+}
+async function animateSwap(a,z){
+ const ta=board[a[0]][a[1]],tz=board[z[0]][z[1]],ea=tileElements.get(ta.id),ez=tileElements.get(tz.id);
+ exchange(board,a,z);ea.style.zIndex='9';ez.style.zIndex='8';
+ ea.style.transform=position(...z);ez.style.transform=position(...a);
+ if(reduceMotion()){await Promise.all([animate(ea,[{opacity:.5},{opacity:1}],60),animate(ez,[{opacity:.5},{opacity:1}],60)]);}
+ else await Promise.all([animate(ea,[{transform:position(...a)},{transform:position(...z)}],230),animate(ez,[{transform:position(...z)},{transform:position(...a)}],230)]);
+ ea.style.zIndex='';ez.style.zIndex='';updateTile(ea,ta,...z);updateTile(ez,tz,...a);
+}
+async function playSwap(a,z){
+ if(busy||activeOverlay||!inside(...a)||!inside(...z)||!adjacent(a,z))return false;
+ interact();clearSelection();const before=snapshot();let remembered=false;lock(true);turnGained=0;
+ try{
+  const left=board[a[0]][a[1]],right=board[z[0]][z[1]],valid=scoringSwap(board,a,z);
+  playSound('swap');await animateSwap(a,z);
+  if(!valid&&!config.freeSwaps){
+   status('Not quite a match. Try another little rearrangement.');playSound('invalid');await pause(85);await animateSwap(a,z);lock(false);lastAction=performance.now();return false;
+  }
+  remember(before);remembered=true;moves++;
+  let forced=null;
+  if(left.special==='wild'||right.special==='wild'){
+   forced=[key(...a),key(...z)];const target=left.special==='wild'?right.type:left.type;
+   for(let r=0;r<config.rows;r++)for(let c=0;c<config.cols;c++)if(target<0||board[r][c].type===target)forced.push(key(r,c));
+  }else if(left.special&&right.special)forced=[key(...a),key(...z)];
+  await resolveBoard(forced,[key(...z),key(...a)]);
+  await finishTurn();return true;
+ }catch(e){console.error(e);restore(before);if(remembered)history.pop();renderBoard();possibleMoves=findMoves();updateUI(true);status('The drawer has been restored safely.');toast(e.message||'That move could not be completed.');lock(false);return false;}
+}
+async function resolveBoard(forced=null,preferred=[]){
+ let depth=0,match=findMatches();
+ while(match.length||(forced&&forced.length)){
+  depth++;bestChain=Math.max(bestChain,depth);
+  const plan=planClear(match,forced,preferred),cleared=[...plan.cells].map(k=>{const [r,c]=unpack(k);return board[r][c];});
+  const mult=config.multipliers?Math.min(depth,10):1,gain=cleared.length*config.points*mult;
+  score+=gain;turnGained+=gain;collectGoal(cleared);updateUI();
+  const captions=['A lovely little find.','One discovery leads to another.','Now that is a collection.','Quite the chain of events.','A splendid little cascade.','The cabinet keeps on giving.'];
+  status(captions[Math.min(depth-1,captions.length-1)],depth>1?`CASCADE ${depth}${config.multipliers?' / x'+mult:''}`:'');
+  playSound('match',depth);for(const fire of plan.fires)powerEffect(fire);
+  const allCells=[...plan.cells],average=allCells.reduce((p,k)=>{const [r,c]=unpack(k);p.r+=r;p.c+=c;return p;},{r:0,c:0});
+  floatPoints(`+${format(gain)}${mult>1?' / x'+mult:''}`,average.r/allCells.length,average.c/allCells.length);
+  const tasks=[];
+  allCells.forEach((k,i)=>{
+   const [r,c]=unpack(k),t=board[r][c],el=tileElements.get(t.id);emitParticles(r,c,plan.fires.length?8:6);
+   const face=el?.firstElementChild;if(face){face.style.opacity='0';tasks.push(animate(face,reduceMotion()?[{opacity:1},{opacity:0}]:[{transform:'scale(1)',opacity:1},{transform:'scale(1.12)',opacity:1,offset:.25},{transform:'scale(.15) rotate(9deg)',opacity:0}],285,{delay:reduceMotion()?0:Math.min(i%7*12,65)/config.speed}));}
+  });
+  await Promise.all(tasks);
+  const popIns=[];
+  for(const k of plan.cells){
+   const [r,c]=unpack(k),t=board[r][c],el=tileElements.get(t.id);
+   if(plan.spawns.has(k)){
+    t.special=plan.spawns.get(k);if(t.special==='wild')t.type=-1;updateTile(el,t,r,c);el.firstElementChild.style.opacity='1';
+    popIns.push(animate(el.firstElementChild,[{transform:'scale(.2)',opacity:0},{transform:'scale(1.12)',opacity:1,offset:.75},{transform:'scale(1)',opacity:1}],290));
+   }else{el?.remove();tileElements.delete(t.id);board[r][c]=null;}
+  }
+  await pause(45);await Promise.all([dropAndFill(depth),...popIns]);
+  forced=null;preferred=[];match=findMatches();
+  // Restrained refilling prevents pathological endless cascades in dense group modes.
+  if(depth>=16&&match.length){status('A full drawer of fresh discoveries.');await refreshBoard(false,false);match=[];}
+ }
+ if(depth===0)status('A little rearranging. No points this time.');
+}
+async function dropAndFill(depth){
+ const animations=[],placements=[];
+ for(let c=0;c<config.cols;c++){
+  const survivors=[];for(let r=config.rows-1;r>=0;r--)if(board[r][c])survivors.push({t:board[r][c],from:r});
+  for(let r=0;r<config.rows;r++)board[r][c]=null;
+  survivors.forEach((item,i)=>{const r=config.rows-1-i;board[r][c]=item.t;placements.push({t:item.t,r,c,from:item.from,fresh:false});});
+ }
+ const restrained=depth>=(config.pattern==='groups'&&config.diagonals?2:4);
+ for(let c=0;c<config.cols;c++){
+  let missing=0;while(missing<config.rows&&!board[missing][c])missing++;
+  // Fill from the settled pile upward so local checks see the pieces underneath.
+  for(let r=missing-1;r>=0;r--){
+   let t=tile(rand(config.kinds));board[r][c]=t;
+   if(restrained){const choices=shuffled(Array.from({length:config.kinds},(_,i)=>i));for(const type of choices){t.type=type;if(!makesMatch(board,r,c))break;}}
+   placements.push({t,r,c,from:r-missing-1,fresh:true});
+  }
+ }
+ for(const p of placements){
+  let el=tileElements.get(p.t.id);if(!el)el=makeTile(p.t,p.r,p.c);updateTile(el,p.t,p.r,p.c);el.style.transform=position(p.r,p.c);
+  if(p.r!==p.from){
+   const distance=p.r-p.from,ms=140+Math.sqrt(distance)*105;
+   animations.push(animate(el,reduceMotion()?[{opacity:p.fresh?0:.6},{opacity:1}]:[{transform:position(p.from,p.c),opacity:p.fresh?.2:1},{transform:position(p.r,p.c),opacity:1}],ms,{easing:'cubic-bezier(.3,.05,.45,1)',delay:reduceMotion()?0:p.c*9/config.speed}));
+  }
+ }
+ await Promise.all(animations);
+}
+async function finishTurn(){
+ possibleMoves=findMoves();
+ if(!possibleMoves.length){status('No scoring swaps left. Refreshing the drawer...');await pause(450);await refreshBoard(false,false);possibleMoves=findMoves();toast('Fresh finds. Your score is safe.');}
+ syncTiles();updateUI();lock(false);save();lastAction=performance.now();
+ if(turnGained>0)status(`Collected ${format(turnGained)} points. What catches your eye next?`);
+ $('announcer').textContent=`Move ${moves}. Score ${score}. ${possibleMoves.length} scoring swaps available.`;
+}
+async function refreshBoard(manual=true,finalize=true){
+ const wasBusy=busy;if(manual&&busy)return;
+ const before=snapshot();if(manual){interact();clearSelection();remember(before);lock(true);}
+ try{
+  const fresh=carrySpecials(generateBoard(),board);
+  // A star replaces a normal piece and can only break matches; it also guarantees a move.
+  status(manual?'A little dusting. A new arrangement.':'Fresh finds arriving.');
+  await animate(boardEl,[{opacity:1},{opacity:.25,transform:reduceMotion()?'none':'scale(.975)'}],170);
+  board=fresh;renderBoard();playSound('shuffle');
+  await animate(boardEl,[{opacity:.25,transform:reduceMotion()?'none':'scale(.975)'},{opacity:1,transform:'scale(1)'}],260);
+  if(finalize){possibleMoves=findMoves();updateUI();lock(false);save();status('A fresh drawer. Your collection stays.');lastAction=performance.now();}
+ }catch(e){restore(before);if(manual)history.pop();renderBoard();possibleMoves=findMoves();updateUI();lock(wasBusy);throw e;}
+}
+async function newGame(){
+ lock(true);interact();clearSelection();resetEffects(true);const oldRng=rng,oldNext=nextId;seedRandom();nextId=1;
+ let fresh;try{fresh=generateBoard();}catch(e){rng=oldRng;nextId=oldNext;throw e;}board=fresh;score=0;moves=0;bestChain=0;totalCollected=0;history=[];quest={level:1,type:rand(config.kinds),goal:12,progress:0};focused=[0,0];
+ renderBoard();possibleMoves=findMoves();updateUI(true);save();status('A drawer full of possibilities. Make yourself at home.');
+ await animate(boardEl,[{opacity:0,transform:reduceMotion()?'none':'translateY(8px)'},{opacity:1,transform:'translateY(0)'}],380);lock(false);lastAction=performance.now();
+}
+async function undo(){
+ if(busy||!history.length)return;interact();clearSelection();resetEffects(true);lock(true);
+ await animate(boardEl,[{opacity:1},{opacity:.35}],130);restore(history.pop());renderBoard();possibleMoves=findMoves();updateUI(true);
+ await animate(boardEl,[{opacity:.35},{opacity:1}],180);lock(false);save();status('One discovery back. A different possibility ahead.');playSound('swap');
+}
+function hint(auto=false){
+ if(busy||activeOverlay||!possibleMoves.length)return;if(!auto)interact();clearSelection();
+ let bestMove=possibleMoves[0],value=-1;
+ for(const move of possibleMoves){
+  const a=board[move.a[0]][move.a[1]],z=board[move.z[0]][move.z[1]];let v=0;
+  if(a.special==='wild'||z.special==='wild')v=20;else if(a.special&&z.special)v=18;
+  else{exchange(board,move.a,move.z);const matched=findMatches();v=new Set(matched.flatMap(m=>m.cells)).size;v+=matched.some(m=>m.cells.length>=config.minimum+1)?5:0;exchange(board,move.a,move.z);}
+  if(v>value){value=v;bestMove=move;}
+ }
+ for(const [r,c]of [bestMove.a,bestMove.z])tileElements.get(board[r][c].id)?.classList.add('hinted');
+ hintTimer=setTimeout(clearHints,auto?6000:9500);
+ if(!auto){status('Those two look promising. Swap the outlined pieces.');$('announcer').textContent=`Hint: swap row ${bestMove.a[0]+1}, column ${bestMove.a[1]+1} with row ${bestMove.z[0]+1}, column ${bestMove.z[1]+1}.`;playSound('hint');}
+}
+/* Small ink-like particles. No canvas loop runs while the board is idle. */
+const canvas=$('particles'),ctx=canvas.getContext('2d');let canvasW=0,canvasH=0,particleList=[],particleRAF=0,particleLast=0;
+function resizeCanvas(){const rect=boardEl.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);canvasW=rect.width;canvasH=rect.height;canvas.width=Math.round(canvasW*dpr);canvas.height=Math.round(canvasH*dpr);ctx?.setTransform(dpr,0,0,dpr,0,0);}
+new ResizeObserver(resizeCanvas).observe(boardEl);
+function emitParticles(r,c,n){
+ if(!config.particles||reduceMotion()||!ctx)return;const x=(c+.5)*canvasW/config.cols,y=(r+.5)*canvasH/config.rows;
+ for(let i=0;i<n&&particleList.length<320;i++){const angle=Math.random()*Math.PI*2,speed=45+Math.random()*110;particleList.push({x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed-45,life:.4+Math.random()*.3,age:0,size:1.5+Math.random()*2.5,angle,ring:i%3===0});}
+ if(!particleRAF){particleLast=performance.now();particleRAF=requestAnimationFrame(particleFrame);}
+}
+function particleFrame(now){
+ const dt=Math.min(.04,(now-particleLast)/1000)*config.speed;particleLast=now;ctx.clearRect(0,0,canvasW,canvasH);
+ particleList=particleList.filter(p=>p.age<p.life);
+ for(const p of particleList){p.age+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=260*dt;p.angle+=dt*3;ctx.save();ctx.globalAlpha=Math.max(0,1-p.age/p.life);ctx.translate(p.x,p.y);ctx.rotate(p.angle);ctx.fillStyle='#171717';ctx.strokeStyle='#171717';ctx.lineWidth=1.2;if(p.ring){ctx.beginPath();ctx.arc(0,0,p.size,0,Math.PI*2);ctx.stroke();}else ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size);ctx.restore();}
+ if(particleList.length)particleRAF=requestAnimationFrame(particleFrame);else{particleRAF=0;ctx.clearRect(0,0,canvasW,canvasH);}
+}
+function floatPoints(text,r,c){
+ const el=document.createElement('span');el.className='points-pop';el.textContent=text;el.style.left=`${Math.max(17,Math.min(83,(c+.5)/config.cols*100))}%`;el.style.top=`${Math.max(15,Math.min(85,(r+.5)/config.rows*100))}%`;effects.append(el);
+ void animate(el,reduceMotion()?[{opacity:1},{opacity:0}]:[{opacity:0,transform:'translate(-50%,-20%) scale(.7)'},{opacity:1,transform:'translate(-50%,-60%) scale(1.04)',offset:.18},{opacity:1,transform:'translate(-50%,-95%) scale(1)',offset:.7},{opacity:0,transform:'translate(-50%,-145%) scale(.95)'}],900).then(()=>el.remove());
+}
+function powerEffect({r,c,special}){
+ if(!config.particles||reduceMotion())return;const x=(c+.5)/config.cols*100,y=(r+.5)/config.rows*100;
+ if(special==='sweep')for(const horizontal of [true,false]){const el=document.createElement('div');el.className='beam';Object.assign(el.style,horizontal?{left:'0',top:`${y}%`,height:'2px',width:'100%'}:{top:'0',left:`${x}%`,width:'2px',height:'100%'});effects.append(el);void animate(el,[{opacity:0,transform:horizontal?'scaleX(.1)':'scaleY(.1)'},{opacity:.9,transform:'scale(1)',offset:.3},{opacity:0,transform:'scale(1)'}],500).then(()=>el.remove());}
+ else{const el=document.createElement('div');el.className='power-ring';el.style.left=`${x}%`;el.style.top=`${y}%`;effects.append(el);const size=(special==='wild'?Math.max(canvasW,canvasH):canvasW/config.cols*3.2);void animate(el,[{width:'5px',height:'5px',opacity:1},{width:`${size}px`,height:`${size}px`,opacity:0}],540).then(()=>el.remove());}
+}
+function toast(message,title=''){
+ const el=document.createElement('div');el.className='toast';if(title){const strong=document.createElement('strong');strong.textContent=title;el.append(strong);}el.append(document.createTextNode(message));$('toasts').append(el);
+ while($('toasts').children.length>1)$('toasts').firstElementChild.remove();
+ void animate(el,[{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'translateY(0)'}],200);
+ setTimeout(()=>{void animate(el,[{opacity:1},{opacity:0}],250).then(()=>el.remove());},title?3700:2800);
+}
+/* Web Audio is activated only by an intentional interaction. */
+let audio=null,master=null;
+function soundUnlock(){if(!config.sound)return;try{if(!audio){const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;audio=new Audio();master=audio.createGain();master.connect(audio.destination);}master.gain.setValueAtTime(config.volume*.22,audio.currentTime);if(audio.state==='suspended')void audio.resume().catch(()=>{});}catch(e){}}
+function updateSoundButton(){$('soundBtn').innerHTML=ui(config.sound?'sound':'mute');$('soundBtn').setAttribute('aria-pressed',String(config.sound));$('soundBtn').setAttribute('aria-label',config.sound?'Turn sound off':'Turn sound on');$('soundBtn').title=config.sound?'Turn sound off':'Turn sound on';if(master&&audio)master.gain.setValueAtTime(config.sound?config.volume*.22:0,audio.currentTime);}
+function playSound(kind,depth=1){
+ if(!config.sound)return;soundUnlock();if(!audio||!master)return;
+ const notes=kind==='match'?[261.63,329.63,392,523.25].map(n=>n*Math.pow(2,Math.min(depth-1,7)/12)):kind==='quest'?[392,523.25,659.25,783.99]:kind==='invalid'?[160,145]:kind==='shuffle'?[196,261.63,329.63]:kind==='hint'?[523.25,659.25]:[330];
+ notes.forEach((freq,i)=>{const start=audio.currentTime+i*(kind==='quest'?.11:.045),osc=audio.createOscillator(),gain=audio.createGain();osc.type='sine';osc.frequency.setValueAtTime(freq,start);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(kind==='swap'?.22:.34,start+.009);gain.gain.exponentialRampToValueAtTime(.001,start+.32);osc.connect(gain);gain.connect(master);osc.start(start);osc.stop(start+.35);osc.onended=()=>{osc.disconnect();gain.disconnect();};});
+}
+/* Pointer, swipe, and keyboard input all feed the same guarded swap function. */
+let drag=null,suppressClickUntil=0;
+boardEl.addEventListener('pointerdown',e=>{
+ if(busy||activeOverlay||e.button!==0)return;const el=e.target.closest('.tile');if(!el)return;interact();soundUnlock();
+ drag={id:e.pointerId,r:+el.dataset.row,c:+el.dataset.col,x:e.clientX,y:e.clientY};el.setPointerCapture?.(e.pointerId);
+});
+boardEl.addEventListener('pointerup',e=>{
+ if(!drag||e.pointerId!==drag.id)return;const d=drag;drag=null;const dx=e.clientX-d.x,dy=e.clientY-d.y,cell=boardEl.clientWidth/config.cols;
+ if(Math.hypot(dx,dy)<Math.max(9,cell*.22))return;
+ suppressClickUntil=performance.now()+500;if(busy)return;
+ let dr=0,dc=0;if(config.diagonalSwaps&&Math.min(Math.abs(dx),Math.abs(dy))>Math.max(Math.abs(dx),Math.abs(dy))*.45){dr=Math.sign(dy);dc=Math.sign(dx);}else if(Math.abs(dx)>Math.abs(dy))dc=Math.sign(dx);else dr=Math.sign(dy);
+ clearSelection();if(inside(d.r+dr,d.c+dc))void playSwap([d.r,d.c],[d.r+dr,d.c+dc]);
+});
+boardEl.addEventListener('pointercancel',()=>drag=null);
+boardEl.addEventListener('click',e=>{if(performance.now()<suppressClickUntil)return;const el=e.target.closest('.tile');if(el)selectCell(+el.dataset.row,+el.dataset.col);});
+boardEl.addEventListener('keydown',e=>{
+ const el=e.target.closest('.tile');if(!el)return;const r=+el.dataset.row,c=+el.dataset.col,dirs={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+ if(dirs[e.key]){e.preventDefault();if(busy)return;const [dr,dc]=dirs[e.key],nr=r+dr,nc=c+dc;if(inside(nr,nc)){if(e.shiftKey){clearSelection();void playSwap([r,c],[nr,nc]).then(()=>focusCell(nr,nc));}else focusCell(nr,nc);}}
+ else if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCell(r,c);}else if(e.key==='Escape'){e.preventDefault();clearSelection();clearHints();}
+});
+$('hintBtn').addEventListener('click',()=>hint());
+$('shuffleBtn').addEventListener('click',()=>{void refreshBoard().catch(e=>toast(e.message));});
+$('undoBtn').addEventListener('click',()=>void undo());
+$('soundBtn').addEventListener('click',()=>{config.sound=!config.sound;updateSoundButton();soundUnlock();if(config.sound)playSound('hint');if(!busy)save();});
+/* Dialogs trap focus and never change the live board until Apply is pressed. */
+function openOverlay(id){
+ if(activeOverlay)closeOverlay(activeOverlay,false);clearHints();clearSelection();previousFocus=document.activeElement;activeOverlay=id;$(id).hidden=false;document.body.style.overflow='hidden';
+ const dialog=$(id).querySelector('[role=dialog]');void animate(dialog,reduceMotion()?[{opacity:0},{opacity:1}]:[{opacity:0,transform:id==='settingsOverlay'?'translateX(25px)':'translateY(12px)'},{opacity:1,transform:'translate(0,0)'}],210);
+ setTimeout(()=>$(id).querySelector('button,input,select')?.focus({preventScroll:true}),25);
+}
+function closeOverlay(id,restoreFocus=true){$(id).hidden=true;activeOverlay=null;document.body.style.overflow='';lastAction=performance.now();if(restoreFocus&&previousFocus?.isConnected)previousFocus.focus({preventScroll:true});}
+document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',()=>closeOverlay(el.dataset.close)));
+document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)closeOverlay(el.id);}));
+document.addEventListener('keydown',e=>{
+ if(!activeOverlay)return;if(e.key==='Escape'){e.preventDefault();closeOverlay(activeOverlay);return;}
+ if(e.key==='Tab'){const items=[...$(activeOverlay).querySelectorAll('button:not(:disabled),input:not([type=hidden]),select,a[href]')].filter(el=>el.getClientRects().length);const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}
+});
+for(const id of ['sRows','sCols'])for(let n=5;n<=12;n++){const o=document.createElement('option');o.value=n;o.textContent=n;$(id).append(o);}
+function writeForm(c){for(const [k,v]of Object.entries(c)){const el=$('settingsForm').elements.namedItem(k);if(!el)continue;if(el.type==='checkbox')el.checked=v;else el.value=v;}updateDraft();}
+function readForm(){const c={};for(const [k,v]of Object.entries(DEFAULTS)){const el=$('settingsForm').elements.namedItem(k);c[k]=el.type==='checkbox'?el.checked:typeof v==='number'?Number(el.value):el.value;}return validConfig(c);}
+function updateDraft(){
+ $('speedOutput').textContent=Number($('sSpeed').value).toFixed(1)+'x';$('volumeOutput').textContent=Math.round($('sVolume').value*100)+'%';
+ const c=readForm(),changes=ruleKey(c)!==ruleKey();$('applyBtn').textContent=changes?'Apply & start new game':'Apply settings';
+ $('settingsNotice').textContent=changes?'Board or scoring changes start a new game. Existing personal bests are kept.':'Feel and finish can change without losing your game.';
+}
+$('settingsForm').addEventListener('input',updateDraft);$('settingsForm').addEventListener('change',updateDraft);$('settingsForm').addEventListener('submit',e=>e.preventDefault());
+$('settingsBtn').addEventListener('click',()=>{if(busy)return;writeForm(config);openOverlay('settingsOverlay');});
+$('defaultsBtn').addEventListener('click',()=>writeForm(DEFAULTS));
+async function applySettings(c){
+ if(busy)return;const oldConfig={...config},oldState=snapshot(),oldHistory=clone(history),changed=ruleKey(c)!==ruleKey();noteRecord();config={...c};if(activeOverlay)closeOverlay(activeOverlay);
+ try{if(changed)await newGame();else{resetEffects();renderBoard();possibleMoves=findMoves();updateUI(true);save();status('Just the way you like it.');}soundUnlock();}
+ catch(e){config=oldConfig;restore(oldState);history=oldHistory;renderBoard();possibleMoves=findMoves();updateUI(true);lock(false);toast(e.message);}
+}
+$('applyBtn').addEventListener('click',()=>void applySettings(readForm()));
+function updateHelp(){
+ $('helpMinimum').textContent=config.minimum;$('helpExample').innerHTML=Array.from({length:config.minimum},()=>`<span>${objectSVG(0)}</span>`).join('');
+ $('helpRules').textContent=`Your cabinet matches ${config.minimum}+ identical icons in ${config.pattern==='lines'?'unbroken straight lines':'connected groups, which can bend and branch'}. ${config.diagonals?'Diagonal matches count too.':'Only horizontal and vertical connections count.'} ${config.diagonalSwaps?'You may swap diagonally.':''} ${config.freeSwaps?'Free swapping is on: even non-matching swaps stay in place.':'Non-matching swaps slide back without costing a move.'}`;
+ const n=config.minimum;$('helpSpecials').innerHTML=config.specials?`<li><strong>${n+1} ${config.pattern==='lines'?'in a line':'in a group'}:</strong> a cross-sweep. Match it later to clear its whole row and column.</li><li><strong>${config.pattern==='lines'?'Intersecting matching lines (an L, T, or cross)':n+2+' in a group'}:</strong> a burst. Match it to clear its surrounding 3 x 3 area.</li><li><strong>${n+(config.pattern==='lines'?2:3)} or more ${config.pattern==='lines'?'in a line':'in a group'}:</strong> a collector's star. Swap it with any icon to collect all of that kind. Two stars collect the whole board.</li><li>Swap any two special pieces to activate both. Specials caught in another special's path activate too. Stars hit by another special collect the most common icon.</li>`:'<li>Special pieces are switched off. Turn them on in Settings for sweeps, bursts, and collector\'s stars.</li>';
+ $('helpScoring').textContent=`Each matched or power-cleared piece earns ${config.points} points, including a piece transformed into a special. ${config.multipliers?'Consecutive cascades multiply that by x2, x3, and so on, up to x10.':'Cascade multipliers are off.'} ${config.quests?'Completing an exhibit awards its displayed bonus and opens another, forever.':'Collection goals are off.'} Personal bests are kept separately for each ruleset. Undo restores the turn but does not erase a personal best already achieved. Refreshing adds no points.`;
+}
+$('helpBtn').addEventListener('click',()=>{updateHelp();openOverlay('helpOverlay');});
+$('newBtn').addEventListener('click',()=>{if(!busy)openOverlay('newOverlay');});
+$('confirmNewBtn').addEventListener('click',()=>{closeOverlay('newOverlay');void newGame().catch(e=>{lock(false);toast(e.message);});});
+$('exportBtn').addEventListener('click',()=>{
+ if(busy)return;const blob=new Blob([JSON.stringify(payload(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='curiosity-cabinet-save.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Your cabinet has been exported.');
+});
+$('importBtn').addEventListener('click',()=>$('importFile').click());
+$('importFile').addEventListener('change',async e=>{
+ const file=e.target.files[0];if(!file)return;try{
+  if(file.size>2e6)throw new Error('That save file is too large.');const p=validatePayload(JSON.parse(await file.text()));
+  const oldConfig=config;let stable=false;try{config=p.config;stable=[p.state,...p.history].every(s=>findMatches(s.board).length===0&&findMoves(s.board,true).length>0);}finally{config=oldConfig;}if(!stable)throw new Error('That save does not contain a settled, playable board.');
+  const merged={...records};for(const [k,v]of Object.entries(p.records))merged[k]=Math.max(v,merged[k]||0);
+  config=p.config;restore(p.state);history=p.history;records=merged;interact();resetEffects(true);if(activeOverlay)closeOverlay(activeOverlay);renderBoard();possibleMoves=findMoves();updateUI(true);lock(false);save();status('Your saved collection is right where you left it.');toast('Cabinet imported successfully.');
+ }catch(err){toast(err.message||'That file could not be opened.');}e.target.value='';
+});
+setInterval(()=>{if(config.autoHints&&!busy&&!activeOverlay&&!document.hidden&&performance.now()-lastAction>15000){lastAction=performance.now();hint(true);}},1000);
+motionPreference.addEventListener?.('change',()=>document.body.classList.toggle('reduced-motion',reduceMotion()));
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!busy)save();if(!document.hidden)lastAction=performance.now();});
+window.addEventListener('pagehide',()=>{if(!busy)save();});
+async function boot(){
+ let loaded=false;
+ try{
+  const stored=localStorage.getItem(STORAGE);if(stored){const p=validatePayload(JSON.parse(stored));config=p.config;records=p.records;restore(p.state);history=p.history;
+   if([p.state,...history].some(s=>findMatches(s.board).length||!findMoves(s.board,true).length))throw new Error('Unsettled save');loaded=true;
+  }
+ }catch(e){config={...DEFAULTS};history=[];}
+ if(loaded){renderBoard();possibleMoves=findMoves();updateUI(true);lock(false);status('Welcome back. Your collection was waiting.');save();}
+ else await newGame();
+}
+// Optional local test surface; never enabled for ordinary visitors.
+if(new URLSearchParams(location.search).has('test'))window.CabinetTest={
+ getState:()=>({config:{...config},...snapshot(),busy,possibleMoves:clone(possibleMoves),historyLength:history.length,records:{...records}}),
+ matches:()=>clone(findMatches()),moves:()=>clone(findMoves()),swap:playSwap,refresh:refreshBoard,undo,
+ apply:c=>applySettings(validConfig({...config,...c})),newGame,
+ loadFixture:(types,specials={})=>{if(busy)throw new Error('Busy');board=types.map((row,r)=>row.map((t,c)=>tile(t,specials[key(r,c)]||null)));score=0;moves=0;bestChain=0;history=[];selected=null;quest={level:1,type:0,goal:12,progress:0};renderBoard();possibleMoves=findMoves();updateUI(true);},
+ inspectPlan:()=>{const p=planClear(findMatches(),null,[]);return {cells:[...p.cells],spawns:[...p.spawns],fires:p.fires};},
+ validate:validatePayload,export:payload,scoringSwap:(a,z)=>scoringSwap(board,a,z),
+ generateMany:n=>{for(let i=0;i<n;i++){const b=generateBoard();if(findMatches(b).length||!findMoves(b,true).length)throw new Error('Bad generation');}return true;}
+};
+void boot().catch(e=>{console.error(e);status('The cabinet could not be opened. Try reloading.');toast(e.message);lock(false);});
+})();
+</script>
+</body>
+</html>
