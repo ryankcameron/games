@@ -134,7 +134,7 @@
 			<form id="settingsForm" class="settings">
 				<label class="field">Grid <input id="sizeInput" aria-label="Grid size, 8 to 200" type="number" min="8" max="200" step="1" value="30" required></label>
 				<label class="field">Seed <input id="seedInput" aria-label="Puzzle seed" type="number" min="0" max="4294967295" step="1" value="42" required></label>
-				<label class="field">Speed <input id="speedInput" aria-label="Arrow exit animation duration in seconds" type="number" min="0.2" max="10" step="0.1" value="0.5" required><span class="unit">s</span></label>
+				<label class="field">Speed <input id="speedInput" aria-label="Arrow movement speed in dots per second" type="number" min="5" max="200" step="5" value="60" required><span class="unit">dots/s</span></label>
 				<button id="loadBtn" type="submit" title="Generate the selected grid and seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Load</span><span class="sr-only"> selected seed</span></button>
 			</form>
 			<button id="newBtn" class="primary" type="button" title="New puzzle with a different seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New<span class="new-label"> puzzle</span></span></button>
@@ -467,7 +467,7 @@ function savePersisted() {
 	try {
 		const N=game?.N ?? Number($('sizeInput').value);
 		const seed=game?.seed ?? Number($('seedInput').value);
-		const speed=clamp(Number($('speedInput').value)||0.5,.2,10);
+		const speed=clamp(Number($('speedInput').value)||60,5,200);
 		const payload={version:1,N,seed,speed,view:game?{zoom:view.zoom,cx:view.cx,cy:view.cy}:null};
 		localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
 	} catch(_) { /* Storage can be disabled; the game still works normally. */ }
@@ -643,8 +643,8 @@ function readSettings() {
 	if(!$('seedInput').value.trim() || !Number.isInteger(seed) || seed<0 || seed>4294967295) {
 		setStatus('Choose a whole-number seed from 0 to 4294967295.',true); $('seedInput').focus(); return null;
 	}
-	if(!$('speedInput').value.trim() || !Number.isFinite(speed) || speed<.2 || speed>10) {
-		setStatus('Choose an arrow animation speed from 0.2 to 10 seconds.',true); $('speedInput').focus(); return null;
+	if(!$('speedInput').value.trim() || !Number.isFinite(speed) || speed<5 || speed>200) {
+		setStatus('Choose an arrow speed from 5 to 200 dots per second.',true); $('speedInput').focus(); return null;
 	}
 	return {N,seed,speed};
 }
@@ -700,8 +700,8 @@ function makeMove(id, automatic=false) {
 		const hx=ox+a.hx*cell,hy=oy+a.hy*cell;
 		const rayToScreen=a.dx===1?(width-hx)/cell:a.dx===-1?hx/cell:a.dy===1?(height-hy)/cell:hy/cell;
 		const total=a.length+Math.max(1,rayToScreen)+2;
-		const exitSeconds=clamp(Number($('speedInput').value)||0.5,.2,10);
-		effects.push({type:'exit',id,start,total,duration:exitSeconds*1000});
+		const dotsPerSecond=clamp(Number($('speedInput').value)||60,5,200);
+		effects.push({type:'exit',id,start,total,dotsPerSecond});
 		if(!game.remaining) { stopDemo(); setStatus('The last arrow is on its way out.'); }
 		else if(automatic) setStatus('Auto-solving. Press Stop or click an arrow to take over.');
 		else setStatus(`${number(game.arrows.length-game.remaining)} cleared. ${number(game.remaining)} to go.`);
@@ -842,7 +842,10 @@ function draw(now) {
 	const t=transform();
 	let completed=false;
 	effects=effects.filter(effect=>{
-		if(now-effect.start<effect.duration) return true;
+		if(effect.type==='exit') {
+			const elapsed=(now-effect.start)/1000;
+			if(elapsed*effect.dotsPerSecond<effect.total) return true;
+		} else if(now-effect.start<effect.duration) return true;
 		if(game && effect.type==='bump') game.arrows[effect.id].animating=false;
 		completed=true;return false;
 	});
@@ -854,11 +857,15 @@ function draw(now) {
 	if(hintId>=0 && game.arrows[hintId].alive && !game.arrows[hintId].animating) paintArrow(ctx,game.arrows[hintId],0,'#226bd1',t,true);
 	if(hoverId>=0 && hoverId!==hintId && game.arrows[hoverId].alive && !game.arrows[hoverId].animating) paintArrow(ctx,game.arrows[hoverId],0,'#000000',t,true);
 	for(const effect of effects) {
-		const p=clamp((now-effect.start)/effect.duration,0,1),a=game.arrows[effect.id];
+		const a=game.arrows[effect.id];
 		if(effect.type==='exit') {
-			const fade=reduceMotion?1-p:1-clamp((p-.12)/.88,0,1)**1.35;
-			paintArrow(ctx,a,effect.total*p*p,'#242729',t,false,fade);
+			const elapsed=(now-effect.start)/1000;
+			const advance=Math.min(effect.total,elapsed*effect.dotsPerSecond);
+			const p=effect.total>0?advance/effect.total:1;
+			const fade=1-clamp((p-.12)/.88,0,1)**1.35;
+			paintArrow(ctx,a,advance,'#242729',t,false,fade);
 		} else {
+			const p=clamp((now-effect.start)/effect.duration,0,1);
 			let k;
 			if(p<.44) k=1-Math.pow(1-p/.44,3);
 			else if(p<.53) k=1;
@@ -987,7 +994,7 @@ canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('wheel',e=>{if(!game||busy)return;e.preventDefault();const p=eventPoint(e);zoomAt(Math.exp(-clamp(e.deltaY,-100,100)*.005),p.x,p.y);},{passive:false});
 window.addEventListener('blur',cancelPointers);
 $('settingsForm').addEventListener('submit',e=>{e.preventDefault();const s=readSettings();if(s)loadPuzzle(s.N,s.seed);});
-$('speedInput').addEventListener('change',()=>{const v=clamp(Number($('speedInput').value)||0.5,.2,10);$('speedInput').value=String(Math.round(v*10)/10);savePersisted();setStatus(`Arrow exit animation: ${$('speedInput').value} seconds.`);});
+$('speedInput').addEventListener('change',()=>{const v=clamp(Number($('speedInput').value)||60,5,200);$('speedInput').value=String(Math.round(v));savePersisted();setStatus(`Arrow speed: ${$('speedInput').value} dots per second.`);});
 $('newBtn').addEventListener('click',newPuzzle);
 $('hintBtn').addEventListener('click',hint);
 $('undoBtn').addEventListener('click',undo);
@@ -1029,7 +1036,10 @@ const saved=readPersisted();
 if(saved) {
 	if(Number.isInteger(saved.N)&&saved.N>=8&&saved.N<=200) initialN=saved.N;
 	if(Number.isInteger(saved.seed)&&saved.seed>=0&&saved.seed<=4294967295) initialSeed=saved.seed;
-	if(Number.isFinite(saved.speed)&&saved.speed>=.2&&saved.speed<=10) $('speedInput').value=String(saved.speed);
+	if(Number.isFinite(saved.speed)) {
+	if(saved.speed>=5&&saved.speed<=200) $('speedInput').value=String(Math.round(saved.speed));
+	else if(saved.speed>=.2&&saved.speed<=10) $('speedInput').value=String(Math.round(clamp(30/saved.speed,5,200)));
+}
 	if(saved.view) restoredView={N:initialN,seed:initialSeed,...saved.view};
 }
 try {
